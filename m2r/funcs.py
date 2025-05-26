@@ -1,4 +1,5 @@
 import numpy as np
+import scipy.special as sci
 import matplotlib.pyplot as plt
 from matplotlib import cm
 from matplotlib.ticker import LinearLocator
@@ -14,6 +15,10 @@ def hankel_estimate(alpha, x):
     raise NotImplementedError(f"alpha must be 0 or 1, got {alpha}")
 
 
+def hankel(alpha, x):
+    return sci.hankel1(alpha, x)
+
+
 def trapezium_rule(n, x0, xn, f):
     xs = np.linspace(x0, xn, n)
     samples = np.array([f(x) for x in xs])
@@ -24,7 +29,7 @@ def trapezium_rule(n, x0, xn, f):
 
 
 def G(r, r_0):
-    return hankel_estimate(0, 1 * np.linalg.norm(r - r_0)) / 4.0j
+    return hankel(0, 1 * np.linalg.norm(r - r_0)) / 4.0j
 
 
 def func(r_0):
@@ -36,14 +41,10 @@ def testpoint(r_0, n=10):
     return trapezium_rule(n, -1, 1, ikG)
 
 
-r_0 = np.array([0, 1])
+n = 50
 
-ikG = func(r_0)
-
-n = 25
-
-xvals = np.linspace(-5, 5, n)
-yvals = np.linspace(-5, 5, n)
+xvals = np.linspace(-20, 20, n)
+yvals = np.linspace(-20, 20, n)
 
 x, y = np.meshgrid(xvals, yvals)
 
@@ -57,9 +58,9 @@ print(z.shape)
 
 fig, ax = plt.subplots(subplot_kw={"projection": "3d"})
 
-surf = ax.plot_surface(x, y, z, cmap=cm.coolwarm, linewidth=0, antialiased=False)
+surf = ax.plot_surface(x, y, z, cmap=cm.coolwarm, linewidth=0, antialiased=False)  # type: ignore
 
-ax.set_zlim(-0.5, 1)
+ax.set_zlim(-0.5, 0.5)  # type: ignore
 fig.colorbar(surf, shrink=0.5, aspect=5)
 
 plt.show()
