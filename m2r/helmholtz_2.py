@@ -86,7 +86,7 @@ class HelmholtzSystem:
                     else:
                         # A[i, j] = sci_int.quad(f_r, nodes[j] - 1/N + eps, nodes[j] + 1/N + eps, limit=np.floor(40*self.k))[0] + 1.0j*sci_int.quad(f_i, nodes[j] - 1/N + eps, nodes[j] + 1/N + eps, limit=np.floor(40*self.k))[0]
                         A[i, j] = 0 + 0j
-                print(A[i,i])
+                print(A[i, i])
             B = 1.0j * self.k * np.identity(N) / 2 + A
         return c, B  # type: ignore
 
@@ -99,24 +99,32 @@ class HelmholtzSystem:
         return self.coeffs[y]
 
     def u_scat(self, r):
-        
-        def f_r(x): return ((self.DG(r, np.array([x, 0])) - 1.0j * self.k * self.G(r, np.array([x, 0]))) * self.weight(x)).real
-        def f_i(x): return ((self.DG(r, np.array([x, 0])) - 1.0j * self.k * self.G(r, np.array([x, 0]))) * self.weight(x)).imag
+        N = np.floor(10*self.k)
+        antinodes = np.linspace(-1, 1, N+1)
 
-        return sci_int.quad(f_r, -1, 1, limit=100)[0] # + 1.0j * sci_int.quad(f_i, -1, 1)[0]
+        sum = 0
+
+        for i in range(N):
+            def f_r(x): return ((self.DG(r, np.array([x, 0])) - 1.0j * self.k * self.G(r, np.array([x, 0]))) * self.coeffs[i]).real
+            def f_i(x): return ((self.DG(r, np.array([x, 0])) - 1.0j * self.k * self.G(r, np.array([x, 0]))) * self.coeffs[i]).imag
+
+            sum += sci_int.quad(f_r, antinodes[i], antinodes[i+1], limit=100)[0]
 
 
 
+        return sum
+        # return sci_int.quad(f_r, -1, 1, limit=100)[0] # + 1.0j * sci_int.quad(f_i, -1, 1)[0]
 
-k = 10
 
-sys = HelmholtzSystem(k, "N")
+k = 5
+
+sys = HelmholtzSystem(k, "D")
 
 print(sys.G(np.array([0, 1]), np.array([1, 1])))
 
 print(sys.u_scat(np.array([0, 1])))
 
-n = 50
+n = 200
 
 xvals = np.linspace(-3, 3, n)
 yvals = np.linspace(-3, 3, n)
