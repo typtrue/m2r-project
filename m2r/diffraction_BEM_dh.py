@@ -8,13 +8,13 @@ import numpy as np
 class HelmholtzSystem:
     def __init__(self, wave_no: float, bcs="D") -> None:
         self.k = wave_no
-        self.N = 10 * wave_no
+        self.N = np.floor(10 * wave_no)
         self.bcs = bcs
 
         # check if boundary conditions are dirichlet or neumann
         if bcs not in "DN":
             raise NotImplementedError
-        
+
         # solve using BEM for phi, our weight function
         self.c, self.B = self.BEM()
         self.weights = np.linalg.solve(self.B, self.c)
@@ -64,8 +64,8 @@ class HelmholtzSystem:
 
             for i in range(N):
                 # we require real and imaginary parts of the function as scipy.integrate.quad() supports real-valued functions only
-                def f_r(x): return (1.0j * self.k * self.G(np.array([0, nodes[i]]), np.array([0, x])) - self.DG(np.array([0, nodes[i]]), np.array([0, x]))).real
-                def f_i(x): return (1.0j * self.k * self.G(np.array([0, nodes[i]]), np.array([0, x])) - self.DG(np.array([0, nodes[i]]), np.array([0, x]))).imag
+                def f_r(x): return (1.0j * self.k * self.G(np.array([nodes[i], 0]), np.array([x, 0])) - self.DG(np.array([nodes[i], 0]), np.array([x, 0]))).real
+                def f_i(x): return (1.0j * self.k * self.G(np.array([nodes[i], 0]), np.array([x, 0])) - self.DG(np.array([nodes[i], 0]), np.array([x, 0]))).imag
 
                 for j in range(N):
                     if i != j:
@@ -82,8 +82,8 @@ class HelmholtzSystem:
             # WIP
 
             for i in range(N):
-                def f_r(x): return (self.k ** 2 * self.G(np.array([0, nodes[i]]), np.array([0, x])) - 1.0j * self.k * self.DG(np.array([0, x]), np.array([0, nodes[i]])) + self.D2G(np.array([0, nodes[i]]), np.array([0, x]))).real
-                def f_i(x): return (self.k ** 2 * self.G(np.array([0, nodes[i]]), np.array([0, x])) - 1.0j * self.k * self.DG(np.array([0, x]), np.array([0, nodes[i]])) + self.D2G(np.array([0, nodes[i]]), np.array([0, x]))).imag
+                def f_r(x): return (self.k ** 2 * self.G(np.array([nodes[i], 0]), np.array([x, 0])) - 1.0j * self.k * self.DG(np.array([x, 0]), np.array([nodes[i], 0])) + self.D2G(np.array([nodes[i], 0]), np.array([x, 0]))).real
+                def f_i(x): return (self.k ** 2 * self.G(np.array([nodes[i], 0]), np.array([x, 0])) - 1.0j * self.k * self.DG(np.array([x, 0]), np.array([nodes[i], 0])) + self.D2G(np.array([nodes[i], 0]), np.array([x, 0]))).imag
                 for j in range(N):
                     if i != j:
                         A[i, j] = sci_int.quad(f_r, nodes[j] - 1/N, nodes[j] + 1/N, limit=np.floor(40*self.k))[0] + 1.0j*sci_int.quad(f_i, nodes[j] - 1/N, nodes[j] + 1/N, limit=np.floor(40*self.k))[0]
@@ -134,7 +134,7 @@ k = 5
 sys = HelmholtzSystem(k, "D")
 
 # resolution of graph
-n = 200
+n = 100
 
 xvals = np.linspace(-3, 3, n)
 yvals = np.linspace(-3, 3, n)
