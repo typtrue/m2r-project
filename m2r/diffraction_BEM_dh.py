@@ -24,23 +24,23 @@ class HelmholtzSystem:
         """Green function for 2D Helmholtz."""
         return 1.0j * sci_sp.hankel1(0, self.k * np.linalg.norm(x - y)) / 4
 
-    def DG(self, r_0, r):
+    def DG(self, r, r_0):
         """Partial derivative of Green function wrt. y in second variable."""
-        w, x = r_0
-        y, z = r
+        w, x = r
+        y, z = r_0
 
-        return 1.0j * self.k * (x - z) * sci_sp.hankel1(1, self.k * np.linalg.norm(r_0 - r)) / (4 * np.linalg.norm(r_0 - r))
+        return 1.0j * self.k * (z - x) * sci_sp.hankel1(1, self.k * np.linalg.norm(r - r_0)) / (4 * np.linalg.norm(r - r_0))
 
-    def D2G(self, r_0, r):
+    def D2G(self, r, r_0):
         """Second partial derivative of Green function, once wrt y in first variable, once wrt y in second."""
-        w, x = r_0
-        y, z = r
+        w, x = r
+        y, z = r_0
 
-        s1 = (2 * (w - y)**2 * sci_sp.hankel1(1, self.k * np.linalg.norm(r_0 - r))) / (np.linalg.norm(r_0 - r) ** 3)
+        s1 = (2 * sci_sp.hankel1(1, self.k * np.linalg.norm(r - r_0))) / (np.linalg.norm(r - r_0) ** 3)
 
-        s2 = (self.k * (x - z)**2 * (sci_sp.hankel1(0, self.k * np.linalg.norm(r_0 - r)) - sci_sp.hankel1(2, self.k * np.linalg.norm(r_0 - r)))) / (np.linalg.norm(r_0 - r) ** 2)
+        s2 = (self.k * (sci_sp.hankel1(0, self.k * np.linalg.norm(r - r_0)) - sci_sp.hankel1(2, self.k * np.linalg.norm(r - r_0)))) / (np.linalg.norm(r - r_0) ** 2)
 
-        return (self.k * 1.0j / 8) * (s1 + s2)
+        return (1.0j * self.k * (x - z) * (w - y) / 8) * (s1 - s2)
 
     def BEM(self):
         """Initialise the BIE and solve using BEM."""
@@ -64,7 +64,8 @@ class HelmholtzSystem:
             # WIP
 
             # analytical solution for the diagonal
-            diag = -self.k * (1 / (2 * N) + 2.0j * (np.log(self.k / (2 * N)) + np.euler_gamma - 1) / (np.pi * N))
+            # diag = - self.k * (1 / (2 * N) + 2.0j * (np.log(self.k / (2 * N)) + np.euler_gamma - 1) / (np.pi * N))
+            diag = -self.k * (np.pi + 2.0j * (np.log(1 / N) + np.log(self.k / 2) - 1)) / (2 * np.pi * N)
 
             for i in range(N):
                 # we require real and imaginary parts of the function as scipy.integrate.quad() supports real-valued functions only
@@ -85,11 +86,12 @@ class HelmholtzSystem:
             #
             # WIP
 
-            diag = 4 * self.k**2 * (1 / (2 * N) + 2.0j * (np.log(self.k / (2 * N)) + np.euler_gamma - 1) / (np.pi * N))
+            diag = -1.0j * self.k ** 2 * (np.pi + 2.0j * (np.log(1 / N) + np.log(self.k / 2) - 1)) / (2 * np.pi * N)
+
 
             for i in range(N):
-                def f_r(x): return (self.k ** 2 * self.G(np.array([nodes[i], 0]), np.array([x, 0])) - 1.0j * self.k * self.DG(np.array([x, 0]), np.array([nodes[i], 0])) + self.D2G(np.array([nodes[i], 0]), np.array([x, 0]))).real
-                def f_i(x): return (self.k ** 2 * self.G(np.array([nodes[i], 0]), np.array([x, 0])) - 1.0j * self.k * self.DG(np.array([x, 0]), np.array([nodes[i], 0])) + self.D2G(np.array([nodes[i], 0]), np.array([x, 0]))).imag
+                def f_r(x): return (-self.k ** 2 * self.G(np.array([nodes[i], 0]), np.array([x, 0])) + 1.0j * self.k * self.DG(np.array([x, 0]), np.array([nodes[i], 0])) + self.D2G(np.array([nodes[i], 0]), np.array([x, 0]))).real
+                def f_i(x): return (-self.k ** 2 * self.G(np.array([nodes[i], 0]), np.array([x, 0])) + 1.0j * self.k * self.DG(np.array([x, 0]), np.array([nodes[i], 0])) + self.D2G(np.array([nodes[i], 0]), np.array([x, 0]))).imag
                 for j in range(N):
                     if i != j:
                         A[i, j] = sci_int.quad(f_r, nodes[j] - 1/N, nodes[j] + 1/N, limit=np.floor(4*N))[0] + 1.0j*sci_int.quad(f_i, nodes[j] - 1/N, nodes[j] + 1/N, limit=np.floor(4*N))[0]
@@ -97,7 +99,7 @@ class HelmholtzSystem:
                         # TODO: find analytical solution for i = j to avoid integrating over singularity
                         A[i, j] = diag
                 print(A[i, i])
-            B = 1.0j * self.k * np.identity(N) / 2 + A
+            B = 1.0j * self.k * np.identity(N) / 2 - A
         return c, B
 
     def weight(self, x):
@@ -155,12 +157,12 @@ class HelmholtzSystem:
 
         mlab.show()
 
-    def amplitude_sample(self, n=1000, r=100):
+    def amplitude_sample(self, n=1000, r=10**4):
         x_vals = np.linspace(0, 2*np.pi, n, endpoint=False)
         y_vals = np.ones(n)
         for i in range(len(y_vals)):
             pos = (r*np.cos(x_vals[i]), r*np.sin(x_vals[i]))
-            y_vals[i] = - (self.u_scat(pos) * np.sqrt(r) / np.exp(1.0j * self.k * r)).real
+            y_vals[i] = (self.u_scat(pos) * np.sqrt(r) / np.exp(1.0j * self.k * r)).real
 
             if i % 100 == 0:
                 print(f"{i}/{n}")
@@ -190,4 +192,4 @@ k = 10
 sys = HelmholtzSystem(k, "D")
 
 # sys.plot_uscat()
-sys.plot_uscat(200, totalu=True)
+sys.amplitude_sample()
