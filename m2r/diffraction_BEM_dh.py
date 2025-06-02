@@ -3,6 +3,7 @@ from matplotlib import cm
 import scipy.special as sci_sp
 import scipy.integrate as sci_int
 import numpy as np
+import mayavi.mlab as mlab
 
 
 class HelmholtzSystem:
@@ -28,7 +29,7 @@ class HelmholtzSystem:
         w, x = r_0
         y, z = r
 
-        return 1.0j * self.k * (z - x) * sci_sp.hankel1(1, self.k * np.linalg.norm(r_0 - r)) / (4 * np.linalg.norm(r_0 - r))
+        return 1.0j * self.k * (x - z) * sci_sp.hankel1(1, self.k * np.linalg.norm(r_0 - r)) / (4 * np.linalg.norm(r_0 - r))
 
     def D2G(self, r_0, r):
         """Second partial derivative of Green function, once wrt y in first variable, once wrt y in second."""
@@ -39,7 +40,7 @@ class HelmholtzSystem:
 
         s2 = (self.k * (x - z)**2 * (sci_sp.hankel1(0, self.k * np.linalg.norm(r_0 - r)) - sci_sp.hankel1(2, self.k * np.linalg.norm(r_0 - r)))) / (np.linalg.norm(r_0 - r) ** 2)
 
-        return - (self.k * 1.0j / 8) * (s1 + s2)
+        return (self.k * 1.0j / 8) * (s1 + s2)
 
     def BEM(self):
         """Initialise the BIE and solve using BEM."""
@@ -62,6 +63,9 @@ class HelmholtzSystem:
             # 
             # WIP
 
+            # analytical solution for the diagonal
+            diag = -self.k * (1 / (2 * N) + 2.0j * (np.log(self.k / (2 * N)) + np.euler_gamma - 1) / (np.pi * N))
+
             for i in range(N):
                 # we require real and imaginary parts of the function as scipy.integrate.quad() supports real-valued functions only
                 def f_r(x): return (1.0j * self.k * self.G(np.array([nodes[i], 0]), np.array([x, 0])) - self.DG(np.array([nodes[i], 0]), np.array([x, 0]))).real
@@ -69,10 +73,10 @@ class HelmholtzSystem:
 
                 for j in range(N):
                     if i != j:
-                        A[i, j] = sci_int.quad(f_r, nodes[j] - 1/N, nodes[j] + 1/N, limit=np.floor(40*self.k))[0] + 1.0j*sci_int.quad(f_i, nodes[j] - 1/N, nodes[j] + 1/N, limit=np.floor(40*self.k))[0]
+                        A[i, j] = sci_int.quad(f_r, nodes[j] - 1/N, nodes[j] + 1/N, limit=np.floor(4*N))[0] + 1.0j*sci_int.quad(f_i, nodes[j] - 1/N, nodes[j] + 1/N, limit=np.floor(4*N))[0]
                     else:
                         # TODO: find analytical solution for i = j to avoid integrating over singularity
-                        A[i, j] = 0 + 0j
+                        A[i, j] = diag
                 print(A[i, i])
             B = np.identity(N) / 2 - A
 
@@ -81,15 +85,17 @@ class HelmholtzSystem:
             #
             # WIP
 
+            diag = 4 * self.k**2 * (1 / (2 * N) + 2.0j * (np.log(self.k / (2 * N)) + np.euler_gamma - 1) / (np.pi * N))
+
             for i in range(N):
                 def f_r(x): return (self.k ** 2 * self.G(np.array([nodes[i], 0]), np.array([x, 0])) - 1.0j * self.k * self.DG(np.array([x, 0]), np.array([nodes[i], 0])) + self.D2G(np.array([nodes[i], 0]), np.array([x, 0]))).real
                 def f_i(x): return (self.k ** 2 * self.G(np.array([nodes[i], 0]), np.array([x, 0])) - 1.0j * self.k * self.DG(np.array([x, 0]), np.array([nodes[i], 0])) + self.D2G(np.array([nodes[i], 0]), np.array([x, 0]))).imag
                 for j in range(N):
                     if i != j:
-                        A[i, j] = sci_int.quad(f_r, nodes[j] - 1/N, nodes[j] + 1/N, limit=np.floor(40*self.k))[0] + 1.0j*sci_int.quad(f_i, nodes[j] - 1/N, nodes[j] + 1/N, limit=np.floor(40*self.k))[0]
+                        A[i, j] = sci_int.quad(f_r, nodes[j] - 1/N, nodes[j] + 1/N, limit=np.floor(4*N))[0] + 1.0j*sci_int.quad(f_i, nodes[j] - 1/N, nodes[j] + 1/N, limit=np.floor(4*N))[0]
                     else:
                         # TODO: find analytical solution for i = j to avoid integrating over singularity
-                        A[i, j] = 0 + 0j
+                        A[i, j] = diag
                 print(A[i, i])
             B = 1.0j * self.k * np.identity(N) / 2 + A
         return c, B
@@ -117,10 +123,60 @@ class HelmholtzSystem:
 
         for i in range(self.N):
             def f_r(x): return ((self.DG(r, np.array([x, 0])) - 1.0j * self.k * self.G(r, np.array([x, 0]))) * self.weights[i]).real
-
-            sum += sci_int.quad(f_r, antinodes[i], antinodes[i+1], limit=100)[0]
+            def f_i(x): return ((self.DG(r, np.array([x, 0])) - 1.0j * self.k * self.G(r, np.array([x, 0]))) * self.weights[i]).imag
+            sum += sci_int.quad(f_r, antinodes[i], antinodes[i+1], limit=100)[0] + 1.0j * sci_int.quad(f_i, antinodes[i], antinodes[i+1], limit=100)[0]
 
         return sum
+
+    def plot_uscat(self, n=50, inp_range=(-3, 3), *, totalu=False):
+        xvals = np.linspace(inp_range[0], inp_range[1], n)
+        yvals = np.linspace(inp_range[0], inp_range[1], n)
+
+        x, y = np.meshgrid(xvals, yvals)
+
+        stack = np.column_stack((x.flatten(), y.flatten()))
+
+        z_vals = np.ones(len(stack))
+
+        print(z_vals)
+        print(len(z_vals))
+
+        for i in range(len(z_vals)):
+            if totalu:
+                z_vals[i] = (self.u_scat(stack[i]) + np.exp(1.0j * self.k * stack[i][1])).real
+            else:
+                z_vals[i] = self.u_scat(stack[i]).real
+            if i % 100 == 0:
+                print(f"{i}/{len(z_vals)}")
+
+        z = np.reshape(z_vals, (-1, n)) 
+
+        s = mlab.surf(x.T, y.T, z.T)
+
+        mlab.show()
+
+    def amplitude_sample(self, n=1000, r=100):
+        x_vals = np.linspace(0, 2*np.pi, n, endpoint=False)
+        y_vals = np.ones(n)
+        for i in range(len(y_vals)):
+            pos = (r*np.cos(x_vals[i]), r*np.sin(x_vals[i]))
+            y_vals[i] = - (self.u_scat(pos) * np.sqrt(r) / np.exp(1.0j * self.k * r)).real
+
+            if i % 100 == 0:
+                print(f"{i}/{n}")
+
+        fig, ax = plt.subplots()
+        ax.plot(x_vals, y_vals)
+        ax.set_xlabel("Angle from center")
+        ax.set_ylabel("Amplitude function")
+
+        ticks = np.linspace(0, 2*np.pi, 5)
+        xlabels = ["0", "π/2", "π", "3π/2", "2π"]
+        ax.set_xticks(ticks, labels=xlabels)
+
+        plt.show()
+
+
 
 
 #############
@@ -129,37 +185,9 @@ class HelmholtzSystem:
 
 
 # wave number
-k = 5
+k = 10
 
 sys = HelmholtzSystem(k, "D")
 
-# resolution of graph
-n = 100
-
-xvals = np.linspace(-3, 3, n)
-yvals = np.linspace(-3, 3, n)
-
-x, y = np.meshgrid(xvals, yvals)
-
-stack = np.column_stack((x.flatten(), y.flatten()))
-
-z_vals = np.ones(len(stack))
-
-for i in range(len(z_vals)):
-    z_vals[i] = sys.u_scat(stack[i])
-    if i % 100 == 0:
-        print(f"{i}/{len(z_vals)}")
-
-# temporary measure to renormalise waves
-max = np.max(z_vals)
-
-z = np.reshape(z_vals, (-1, n))
-
-fig, ax = plt.subplots(subplot_kw={"projection": "3d"})
-
-surf = ax.plot_surface(x, y, z, cmap=cm.coolwarm, linewidth=0, antialiased=False)
-
-ax.set_zlim(-5, 5)
-fig.colorbar(surf, shrink=0.5, aspect=5)
-
-plt.show()
+# sys.plot_uscat()
+sys.plot_uscat(200, totalu=True)
