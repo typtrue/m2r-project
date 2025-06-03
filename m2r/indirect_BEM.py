@@ -6,15 +6,22 @@ import matplotlib.pyplot as plt
 
 
 class IndirectBEM:
-    def __init__(self, interval, alpha, normal, k=10, n=100):
+    def __init__(self, start_point, end_point, alpha, k=10, n=100):
         self.k = k
-        self.phi = []
         self.N = int(min(n, 10*k + 2))  # number of elements
-        self.interval = interval  # [-1, 1]
+        self.start_point = np.array(start_point)  # [x1_start, x2_start]
+        self.end_point = np.array(end_point)      # [x1_end, x2_end]
         self.alpha = alpha
-        self.normal = normal
+        
+        # Calculate line properties
+        self.line_vector = self.end_point - self.start_point
+        self.line_length = np.linalg.norm(self.line_vector)
+        self.tangent = self.line_vector / self.line_length if self.line_length > 0 else np.array([1, 0])
+        # Normal vector (rotate tangent 90 degrees counterclockwise)
+        self.normal = np.array([-self.tangent[1], self.tangent[0]])
+        
         self.interval_creator()
-        self.mids = np.array([(self.intervals[i] + self.intervals[i+1])/2 for i in range(len(self.intervals)-1)])
+        self.calc_physical_mids()
         self.A = np.zeros((self.N, self.N), dtype=complex)
         self.g_prime = np.zeros(self.N, dtype=complex)
         self.phi = np.zeros(self.N, dtype=complex)
@@ -22,21 +29,34 @@ class IndirectBEM:
         self.calc_g_prime()
         self.calc_phi()
 
+    def param_to_physical(self, t):
+        """Convert parameter t ∈ [0, 1] to physical coordinates on the line segment."""
+        return self.start_point + t * self.line_vector
+
+    def physical_to_param(self, point):
+        """Convert physical point to parameter t along the line segment."""
+        if self.line_length == 0:
+            return 0
+        return np.dot(point - self.start_point, self.line_vector) / (self.line_length**2)
+
     def interval_creator(self):
-        """5k in each of the 1/k intervals either side of the endpoints."""
+        """Create parameter intervals in [0, 1] for the line segment."""
         if self.N == 0:
-            self.intervals = []
+            self.param_intervals = []
             return
 
         n_boundary_region1 = max(0, int(round(5 * self.k)))
         n_boundary_region3 = max(0, int(round(5 * self.k)))
         n_middle_region = max(0, int(self.N - n_boundary_region1 - n_boundary_region3))
 
-        pt_A = float(self.interval[0])
-        pt_D = float(self.interval[1])
+        # Parameter space is [0, 1]
+        pt_A = 0.0
+        pt_D = 1.0
 
-        ideal_transition_B = pt_A + 1.0 / self.k
-        ideal_transition_C = pt_D - 1.0 / self.k
+        # Scale the 1/k regions to parameter space
+        param_scale = 1.0 / (self.k * self.line_length) if self.line_length > 0 else 0.1
+        ideal_transition_B = pt_A + param_scale
+        ideal_transition_C = pt_D - param_scale
 
         actual_B_endpoint = min(ideal_transition_B, pt_D)
         actual_B_endpoint = max(actual_B_endpoint, pt_A)
@@ -63,76 +83,111 @@ class IndirectBEM:
             )
 
         if nodes_to_concatenate:
-            self.intervals = np.unique(np.concatenate(nodes_to_concatenate))
+            self.param_intervals = np.unique(np.concatenate(nodes_to_concatenate))
         else:
-            self.intervals = np.array([pt_A, pt_D])
+            self.param_intervals = np.array([pt_A, pt_D])
 
-    def kernel(self, x1, y1, n1):
-        if np.isclose(x1, y1):
-            return 0
-        elif np.isclose(n1, 0):
+    def calc_physical_mids(self):
+        """Calculate physical midpoints of each interval."""
+        param_mids = np.array([(self.param_intervals[i] + self.param_intervals[i+1])/2 
+                              for i in range(len(self.param_intervals)-1)])
+        self.mids = np.array([self.param_to_physical(t) for t in param_mids])
+
+    def kernel(self, x_point, y_point, normal_vec):
+        """Kernel function for points in 2D space."""
+        diff = x_point - y_point
+        R = np.linalg.norm(diff)
+
+        if np.isclose(R, 0):
             return 0 + 0j
-        S = np.sign(x1 - y1)
-        R = np.abs(x1 - y1)
-        return n1 * (1j * self.k / 4.0) * S * hankel1(1, self.k * R)
+
+        # Direction from y to x
+        direction = diff / R
+        # Normal derivative
+        normal_deriv = np.dot(direction, normal_vec)
+
+        return normal_deriv * (1j * self.k / 4.0) * hankel1(1, self.k * R)
 
     def incident_field(self, x1, x2, alpha):
         return e ** (1j * self.k * (x1 * cos(alpha) + x2 * sin(alpha)))
 
     def calc_g_prime(self):
-        u_inc = np.exp(1j * self.k * self.mids * np.cos(self.alpha))
+        """Calculate the boundary condition g' = -∂u_inc/∂n."""
+        u_inc = np.array([self.incident_field(mid[0], mid[1], self.alpha) for mid in self.mids])
+
+        # Gradient of incident field
         duinc_dx1 = 1j * self.k * cos(self.alpha) * u_inc
         duinc_dx2 = 1j * self.k * sin(self.alpha) * u_inc
+
+        # Normal derivative
         self.g_prime = -(self.normal[0] * duinc_dx1 + self.normal[1] * duinc_dx2)
 
-    def f_y1(self, y1, x1, n1):
-        if np.isclose(n1, 0.0):
-            return 0.0 + 0.0j
-
-        R = np.abs(x1 - y1)
-
+    def f_y_param(self, t, x_point, normal_vec):
+        """Integrand function in parameter space."""
+        y_point = self.param_to_physical(t)
+        diff = x_point - y_point
+        R = np.linalg.norm(diff)
+        
         if np.isclose(R, 0.0):
-            val = -n1 * (1j * self.k / 4.0) * (-2j / np.pi)
-            return val.real + val.imag * 1j
-
-        integrand_val = -n1 * (1j * self.k / 4.0) * R * hankel1(1, self.k * R)
-        return integrand_val
+            # Handle singularity
+            val = -np.dot(normal_vec, normal_vec) * (1j * self.k / 4.0) * (-2j / np.pi)
+            return (val.real + val.imag * 1j) * self.line_length
+        
+        direction = diff / R
+        normal_deriv = np.dot(direction, normal_vec)
+        integrand_val = -normal_deriv * (1j * self.k / 4.0) * R * hankel1(1, self.k * R)
+        
+        # Multiply by Jacobian (line_length) for parameter transformation
+        return integrand_val * self.line_length
 
     def calc_A(self):
-        if np.isclose(self.normal[0], 0.0):
-            np.fill_diagonal(self.A, 0.5 + 0.0j)
-            return
-
+        """Calculate the matrix A."""
         for i in range(len(self.mids)):
-            a_i = self.intervals[i]
-            b_i = self.intervals[i+1]
+            t_a = self.param_intervals[i]
+            t_b = self.param_intervals[i+1]
+            x_point = self.mids[i]
 
-            # Handle principal value integral by splitting into real and imaginary parts
-            def f_y1_real(y1, x1, n1):
-                return np.real(self.f_y1(y1, x1, n1))
+            # Handle diagonal elements with principal value
+            def f_real(t, x_pt, n_vec):
+                return np.real(self.f_y_param(t, x_pt, n_vec))
 
-            def f_y1_imag(y1, x1, n1):
-                return np.imag(self.f_y1(y1, x1, n1))
+            def f_imag(t, x_pt, n_vec):
+                return np.imag(self.f_y_param(t, x_pt, n_vec))
 
-            args_pv = (self.mids[i], self.normal[0])
+            # Parameter value for the singularity
+            t_singular = self.physical_to_param(x_point)
+            
+            args_pv = (x_point, self.normal)
 
-            pv_real, _ = quad(f_y1_real, a_i, b_i, args=args_pv, weight='cauchy', wvar=self.mids[i])
-            pv_imag, _ = quad(f_y1_imag, a_i, b_i, args=args_pv, weight='cauchy', wvar=self.mids[i])
+            if t_a <= t_singular <= t_b:
+                # Principal value integral
+                pv_real, _ = quad(f_real, t_a, t_b, args=args_pv, weight='cauchy', wvar=t_singular)
+                pv_imag, _ = quad(f_imag, t_a, t_b, args=args_pv, weight='cauchy', wvar=t_singular)
+                self.A[i, i] = 0.5 + pv_real + 1j * pv_imag
+            else:
+                # Regular integral
+                real_part, _ = quad(f_real, t_a, t_b, args=args_pv)
+                imag_part, _ = quad(f_imag, t_a, t_b, args=args_pv)
+                self.A[i, i] = real_part + 1j * imag_part
 
-            self.A[i, i] = 0.5 + pv_real + 1j * pv_imag
-
+            # Off-diagonal elements
             for j in range(len(self.mids)):
                 if i == j:
                     continue
 
-                def kernel_real(y1_s, x1_f, n1_f):
-                    return np.real(self.kernel(x1_f, y1_s, n1_f))
+                t_a_j = self.param_intervals[j]
+                t_b_j = self.param_intervals[j+1]
 
-                def kernel_imag(y1_s, x1_f, n1_f):
-                    return np.imag(self.kernel(x1_f, y1_s, n1_f))
+                def kernel_real_param(t, x_pt, n_vec):
+                    y_pt = self.param_to_physical(t)
+                    return np.real(self.kernel(x_pt, y_pt, n_vec)) * self.line_length
 
-                real_part, _ = quad(kernel_real, self.intervals[j], self.intervals[j+1], args=(self.mids[i], self.normal[0]))
-                imag_part, _ = quad(kernel_imag, self.intervals[j], self.intervals[j+1], args=(self.mids[i], self.normal[0]))
+                def kernel_imag_param(t, x_pt, n_vec):
+                    y_pt = self.param_to_physical(t)
+                    return np.imag(self.kernel(x_pt, y_pt, n_vec)) * self.line_length
+
+                real_part, _ = quad(kernel_real_param, t_a_j, t_b_j, args=(x_point, self.normal))
+                imag_part, _ = quad(kernel_imag_param, t_a_j, t_b_j, args=(x_point, self.normal))
 
                 self.A[i, j] = real_part + 1j * imag_part
 
@@ -144,103 +199,159 @@ class IndirectBEM:
             print(f"Error solving linear system: {e}")
             return None
 
-    def green_function(self, x, y1):
-        x1, x2 = x
-        R = np.sqrt((x1 - y1)**2 + (x2 - 0.0)**2)
+    def green_function(self, x, y):
+        """Green's function between two 2D points."""
+        diff = np.array(x) - np.array(y)
+        R = np.linalg.norm(diff)
 
         if np.isclose(R, 0.0):
             return np.inf + 0.0j
         return -(1j)/4 * hankel1(0, self.k * R)
 
     def calc_u_scat(self, x):
+        """Calculate scattered field at evaluation points x."""
         u_scattered = np.zeros(len(x), dtype=complex)
 
         for idx_x, x_point in enumerate(x):
             if idx_x % 100 == 0:
                 print(f"{idx_x} completed.")
             val_at_x_point = 0.0 + 0.0j
+            
             for j in range(len(self.mids)):
                 phi_j = self.phi[j]
+                t_a = self.param_intervals[j]
+                t_b = self.param_intervals[j+1]
 
-                def green_real(y1_s, x_f):
-                    return np.real(self.green_function(x_f, y1_s))
+                def green_real_param(t, x_pt):
+                    y_pt = self.param_to_physical(t)
+                    return np.real(self.green_function(x_pt, y_pt)) * self.line_length
 
-                def green_imag(y1_s, x_f):
-                    return np.imag(self.green_function(x_f, y1_s))
+                def green_imag_param(t, x_pt):
+                    y_pt = self.param_to_physical(t)
+                    return np.imag(self.green_function(x_pt, y_pt)) * self.line_length
 
-                real_part, _ = quad(green_real, self.intervals[j], self.intervals[j+1], args=(x_point,))
-                imag_part, _ = quad(green_imag, self.intervals[j], self.intervals[j+1], args=(x_point,))
+                real_part, _ = quad(green_real_param, t_a, t_b, args=(x_point,))
+                imag_part, _ = quad(green_imag_param, t_a, t_b, args=(x_point,))
 
-                integral_G_dy1 = real_part + 1j * imag_part
-                val_at_x_point += phi_j * integral_G_dy1
+                integral_G_dy = real_part + 1j * imag_part
+                val_at_x_point += phi_j * integral_G_dy
+                
             u_scattered[idx_x] = val_at_x_point
 
         return u_scattered
 
 
-def run_bem_test(bounds, alpha_rad, normal_v, k, n):
-    alpha = np.rad2deg(alpha_rad)
-    bem = IndirectBEM(interval=bounds, alpha=alpha_rad, normal=normal_v, k=k, n=n)
-
+def run_bem_test(start_point, end_point, alpha_rad, k, n):
+    alpha_deg = np.rad2deg(alpha_rad)
+    bem = IndirectBEM(start_point=start_point, end_point=end_point, alpha=alpha_rad, k=k, n=n)
+    
+    # Density plots (phi)
     plt.figure(figsize=(12, 5))
-    plt.suptitle(f'k={k}, normal=[{normal_v[0]:.2f},{normal_v[1]:.2f}], No. Elements={bem.N}, Angle={alpha}°')
-
+    plt.suptitle(f'k={k}, normal=[{bem.normal[0]:.2f},{bem.normal[1]:.2f}], No. Elements={bem.N}, Angle={alpha_deg}°')
+    
+    # Parameter values for plotting
+    param_mids = np.array([(bem.param_intervals[i] + bem.param_intervals[i+1])/2 
+                          for i in range(len(bem.param_intervals)-1)])
+    
     plt.subplot(1, 2, 1)
-    plt.plot(bem.mids, np.real(bem.phi), 'b.-', label='Re($\phi$)')
-    plt.plot(bem.mids, np.imag(bem.phi), 'r.-', label='Im($\phi$)')
-    plt.xlabel('$x_1$ on boundary $\Gamma$')
-    plt.ylabel('Density $\phi(x_1)$')
+    plt.plot(param_mids, np.real(bem.phi), 'b.-', label='Re($\phi$)')
+    plt.plot(param_mids, np.imag(bem.phi), 'r.-', label='Im($\phi$)')
+    plt.xlabel('Parameter $t$ along boundary')
+    plt.ylabel('Density $\phi(t)$')
     plt.legend()
     plt.grid(True)
     plt.title('Solved Density $\phi$')
-
+    
     plt.subplot(1, 2, 2)
-    plt.plot(bem.mids, np.abs(bem.phi), 'g.-', label='$|\phi|$')
-    plt.xlabel('$x_1$ on boundary $\Gamma$')
-    plt.ylabel('Magnitude $|\phi(x_1)|$')
+    plt.plot(param_mids, np.abs(bem.phi), 'g.-', label='$|\phi|$')
+    plt.xlabel('Parameter $t$ along boundary')
+    plt.ylabel('Magnitude $|\phi(t)|$')
     plt.legend()
     plt.grid(True)
     plt.title('Magnitude of $\phi$')
-
     plt.tight_layout(rect=[0, 0, 1, 0.96])
     plt.show()
 
+    # Field plots
     grid_res = 50
-    x_coords = np.linspace(min(bounds[0]-1, -2), max(bounds[1]+1, 2), grid_res)
-    y_coords = np.linspace(-1, 2, grid_res)  # Start slightly above the boundary
+    # Determine plot bounds based on line segment
+    all_coords = np.vstack([bem.start_point, bem.end_point])
+    x_min, x_max = all_coords[:, 0].min() - 2, all_coords[:, 0].max() + 2
+    y_min, y_max = all_coords[:, 1].min() - 2, all_coords[:, 1].max() + 2
+    
+    x_coords = np.linspace(x_min, x_max, grid_res)
+    y_coords = np.linspace(y_min, y_max, grid_res)
     X_grid, Y_grid = np.meshgrid(x_coords, y_coords)
     eval_points_grid = np.vstack([X_grid.ravel(), Y_grid.ravel()]).T
 
-    print(f"  Calculating scattered field on a {grid_res}x{grid_res} grid (this might take a moment)...")
+    u_inc_grid = bem.incident_field(eval_points_grid[:, 0], eval_points_grid[:, 1], alpha_rad)
+
+    print(f"Calculating scattered field on a {grid_res}x{grid_res} grid...")
     u_scat_grid = bem.calc_u_scat(eval_points_grid)
     U_scat_magnitude = np.abs(u_scat_grid).reshape(X_grid.shape)
 
-    # Total field
-    u_inc_grid = bem.incident_field(eval_points_grid[:, 0], eval_points_grid[:, 1], alpha_rad)
     U_total_magnitude = np.abs(u_inc_grid + u_scat_grid).reshape(X_grid.shape)
 
-    plt.figure(figsize=(14, 6))
-    plt.suptitle(f'Wave Fields (k={k}, normal=[{normal_v[0]:.2f},{normal_v[1]:.2f}], Angle={alpha}°)', fontsize=14)
+    plt.figure(figsize=(21, 6))
+    plt.suptitle(f'Wave Fields (k={k}, Line from {start_point} to {end_point}, Angle={alpha_deg}°)', fontsize=14)
 
-    plt.subplot(1, 2, 1)
-    plt.imshow(U_scat_magnitude, extent=[x_coords.min(), x_coords.max(), y_coords.min(), y_coords.max()], 
-               origin='lower', aspect='auto', cmap='viridis', interpolation='nearest')
-    plt.colorbar(label='$|u_{scat}|$')
-    plt.plot(bounds, [0, 0], 'r-', linewidth=3, label='Boundary $\Gamma$')
-    plt.xlabel('$x_1$')
-    plt.ylabel('$x_2$')
-    plt.title('Scattered Field Magnitude $|u_{scat}|$')
-    plt.legend()
+    # Subplot 1: Incident Wave Path (Arrows) + Boundary
+    ax1 = plt.subplot(1, 3, 1)
+    arrow_skip = max(1, grid_res // 10)
+    X_q, Y_q = X_grid[::arrow_skip, ::arrow_skip], Y_grid[::arrow_skip, ::arrow_skip]
+    
+    u_direction = np.cos(alpha_rad)
+    v_direction = np.sin(alpha_rad)
+    U_q = np.full_like(X_q, u_direction)
+    V_q = np.full_like(Y_q, v_direction)
 
-    plt.subplot(1, 2, 2)
-    plt.imshow(U_total_magnitude, extent=[x_coords.min(), x_coords.max(), y_coords.min(), y_coords.max()],
-               origin='lower', aspect='auto', cmap='viridis', interpolation='nearest')
-    plt.colorbar(label='$|u_{total}|$')
-    plt.plot(bounds, [0, 0], 'r-', linewidth=3, label='Boundary $\Gamma$')
-    plt.xlabel('$x_1$')
-    plt.ylabel('$x_2$')
-    plt.title('Total Field Magnitude $|u_{inc} + u_{scat}|$')
-    plt.legend()
+    sine_alpha = np.sin(alpha_rad)
+    if sine_alpha > 1e-6:
+        mask = Y_q > max(bem.start_point[1], bem.end_point[1])
+        U_q[mask] = np.nan
+        V_q[mask] = np.nan
+    elif sine_alpha < -1e-6:
+        mask = Y_q < min(bem.start_point[1], bem.end_point[1])
+        U_q[mask] = np.nan
+        V_q[mask] = np.nan
+
+    ax1.quiver(X_q, Y_q, U_q, V_q, angles='xy', scale_units='xy', scale=(k/1.5 or 5), 
+               color='cyan', headwidth=5, headlength=7, width=0.004, pivot='tail')
+    ax1.plot([bem.start_point[0], bem.end_point[0]], [bem.start_point[1], bem.end_point[1]], 
+             'r-', linewidth=3, label='Boundary $\Gamma$')
+    ax1.set_xlabel('$x_1$')
+    ax1.set_ylabel('$x_2$')
+    ax1.set_title('Incident Wave Path')
+    ax1.legend()
+    ax1.set_xlim(x_coords.min(), x_coords.max())
+    ax1.set_ylim(y_coords.min(), y_coords.max())
+    ax1.set_aspect('equal', adjustable='box')
+
+    # Subplot 2: Scattered Field Magnitude
+    ax2 = plt.subplot(1, 3, 2)
+    im_scat = ax2.imshow(U_scat_magnitude, extent=[x_coords.min(), x_coords.max(), y_coords.min(), y_coords.max()],
+                         origin='lower', aspect='auto', cmap='viridis', interpolation='nearest')
+    plt.colorbar(im_scat, ax=ax2, label='$|u_{scat}|$')
+    ax2.plot([bem.start_point[0], bem.end_point[0]], [bem.start_point[1], bem.end_point[1]], 
+             'r-', linewidth=3, label='Boundary $\Gamma$')
+    ax2.set_xlabel('$x_1$')
+    ax2.set_ylabel('$x_2$')
+    ax2.set_title('Scattered Field Magnitude $|u_{scat}|$')
+    ax2.legend()
+    ax2.set_aspect('equal', adjustable='box')
+
+    # Subplot 3: Total Field Magnitude
+    ax3 = plt.subplot(1, 3, 3)
+    im_total = ax3.imshow(U_total_magnitude, extent=[x_coords.min(), x_coords.max(), y_coords.min(), y_coords.max()],
+                          origin='lower', aspect='auto', cmap='viridis', interpolation='nearest')
+    plt.colorbar(im_total, ax=ax3, label='$|u_{total}|$')
+    ax3.plot([bem.start_point[0], bem.end_point[0]], [bem.start_point[1], bem.end_point[1]], 
+             'r-', linewidth=3, label='Boundary $\Gamma$')
+    ax3.set_xlabel('$x_1$')
+    ax3.set_ylabel('$x_2$')
+    ax3.set_title('Total Field Magnitude $|u_{inc} + u_{scat}|$')
+    ax3.legend()
+    ax3.set_aspect('equal', adjustable='box')
 
     plt.tight_layout(rect=[0, 0, 1, 0.95])
     plt.show()
@@ -250,6 +361,11 @@ def run_bem_test(bounds, alpha_rad, normal_v, k, n):
 
 
 if __name__ == '__main__':
-    # run_bem_test([-1, 1], 0, [0, 1], 5.0, 100)  # parallel wave
-    run_bem_test([-2, 2], np.pi/4, [1, 0], 8.0, 160)  # perpendicular wave
-    run_bem_test([-1, 1], np.pi/6, [1/np.sqrt(2), 1/np.sqrt(2)], 10.0, 200)  # angled wave
+    # Horizontal line (equivalent to original [-1, 1] on x-axis)
+    run_bem_test([-1, 0], [1, 0], 0, 5.0, 100)
+
+    # Vertical line
+    run_bem_test([0, -1], [0, 1], np.pi/2, 8.0, 160)
+
+    # Diagonal line
+    run_bem_test([-1, -1], [1, 1], np.pi/6, 10.0, 200)
