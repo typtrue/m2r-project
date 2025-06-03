@@ -178,8 +178,8 @@ class IndirectBEM:
         return u_scattered
 
 
-def run_bem_test(bounds, alpha, normal_v, k, n):
-    alpha_rad = np.deg2rad(alpha)
+def run_bem_test(bounds, alpha_rad, normal_v, k, n):
+    alpha = np.rad2deg(alpha_rad)
     bem = IndirectBEM(interval=bounds, alpha=alpha_rad, normal=normal_v, k=k, n=n)
 
     plt.figure(figsize=(12, 5))
