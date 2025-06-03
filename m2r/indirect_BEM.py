@@ -110,7 +110,7 @@ class IndirectBEM:
             # Handle principal value integral by splitting into real and imaginary parts
             def f_y1_real(y1, x1, n1):
                 return np.real(self.f_y1(y1, x1, n1))
-            
+
             def f_y1_imag(y1, x1, n1):
                 return np.imag(self.f_y1(y1, x1, n1))
 
@@ -118,7 +118,7 @@ class IndirectBEM:
 
             pv_real, _ = quad(f_y1_real, a_i, b_i, args=args_pv, weight='cauchy', wvar=self.mids[i])
             pv_imag, _ = quad(f_y1_imag, a_i, b_i, args=args_pv, weight='cauchy', wvar=self.mids[i])
-            
+
             self.A[i, i] = 0.5 + pv_real + 1j * pv_imag
 
             for j in range(len(self.mids)):
@@ -127,7 +127,7 @@ class IndirectBEM:
 
                 def kernel_real(y1_s, x1_f, n1_f):
                     return np.real(self.kernel(x1_f, y1_s, n1_f))
-                
+
                 def kernel_imag(y1_s, x1_f, n1_f):
                     return np.imag(self.kernel(x1_f, y1_s, n1_f))
 
@@ -164,13 +164,13 @@ class IndirectBEM:
 
                 def green_real(y1_s, x_f):
                     return np.real(self.green_function(x_f, y1_s))
-                
+
                 def green_imag(y1_s, x_f):
                     return np.imag(self.green_function(x_f, y1_s))
 
                 real_part, _ = quad(green_real, self.intervals[j], self.intervals[j+1], args=(x_point,))
                 imag_part, _ = quad(green_imag, self.intervals[j], self.intervals[j+1], args=(x_point,))
-                
+
                 integral_G_dy1 = real_part + 1j * imag_part
                 val_at_x_point += phi_j * integral_G_dy1
             u_scattered[idx_x] = val_at_x_point
