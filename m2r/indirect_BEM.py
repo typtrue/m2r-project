@@ -12,14 +12,14 @@ class IndirectBEM:
         self.start_point = np.array(start_point)  # [x1_start, x2_start]
         self.end_point = np.array(end_point)      # [x1_end, x2_end]
         self.alpha = alpha
-        
+
         # Calculate line properties
         self.line_vector = self.end_point - self.start_point
         self.line_length = np.linalg.norm(self.line_vector)
         self.tangent = self.line_vector / self.line_length if self.line_length > 0 else np.array([1, 0])
         # Normal vector (rotate tangent 90 degrees counterclockwise)
         self.normal = np.array([-self.tangent[1], self.tangent[0]])
-        
+
         self.interval_creator()
         self.calc_physical_mids()
         self.A = np.zeros((self.N, self.N), dtype=complex)
@@ -127,51 +127,27 @@ class IndirectBEM:
         y_point = self.param_to_physical(t)
         diff = x_point - y_point
         R = np.linalg.norm(diff)
-        
+
         if np.isclose(R, 0.0):
             # Handle singularity
             val = -np.dot(normal_vec, normal_vec) * (1j * self.k / 4.0) * (-2j / np.pi)
             return (val.real + val.imag * 1j) * self.line_length
-        
+
         direction = diff / R
         normal_deriv = np.dot(direction, normal_vec)
         integrand_val = -normal_deriv * (1j * self.k / 4.0) * R * hankel1(1, self.k * R)
-        
+
         # Multiply by Jacobian (line_length) for parameter transformation
         return integrand_val * self.line_length
 
     def calc_A(self):
         """Calculate the matrix A."""
         for i in range(len(self.mids)):
-            t_a = self.param_intervals[i]
-            t_b = self.param_intervals[i+1]
-            x_point = self.mids[i]
-
-            # Handle diagonal elements with principal value
-            def f_real(t, x_pt, n_vec):
-                return np.real(self.f_y_param(t, x_pt, n_vec))
-
-            def f_imag(t, x_pt, n_vec):
-                return np.imag(self.f_y_param(t, x_pt, n_vec))
-
-            # Parameter value for the singularity
-            t_singular = self.physical_to_param(x_point)
-            
-            args_pv = (x_point, self.normal)
-
-            if t_a <= t_singular <= t_b:
-                # Principal value integral
-                pv_real, _ = quad(f_real, t_a, t_b, args=args_pv, weight='cauchy', wvar=t_singular)
-                pv_imag, _ = quad(f_imag, t_a, t_b, args=args_pv, weight='cauchy', wvar=t_singular)
-                self.A[i, i] = 0.5 + pv_real + 1j * pv_imag
-            else:
-                # Regular integral
-                real_part, _ = quad(f_real, t_a, t_b, args=args_pv)
-                imag_part, _ = quad(f_imag, t_a, t_b, args=args_pv)
-                self.A[i, i] = real_part + 1j * imag_part
+            self.A[i, i] = 0.5 + 0.0j
 
             # Off-diagonal elements
             for j in range(len(self.mids)):
+                
                 if i == j:
                     continue
 
@@ -186,8 +162,8 @@ class IndirectBEM:
                     y_pt = self.param_to_physical(t)
                     return np.imag(self.kernel(x_pt, y_pt, n_vec)) * self.line_length
 
-                real_part, _ = quad(kernel_real_param, t_a_j, t_b_j, args=(x_point, self.normal))
-                imag_part, _ = quad(kernel_imag_param, t_a_j, t_b_j, args=(x_point, self.normal))
+                real_part, _ = quad(kernel_real_param, t_a_j, t_b_j, args=(self.mids[i], self.normal))
+                imag_part, _ = quad(kernel_imag_param, t_a_j, t_b_j, args=(self.mids[i], self.normal))
 
                 self.A[i, j] = real_part + 1j * imag_part
 
@@ -216,7 +192,7 @@ class IndirectBEM:
             if idx_x % 100 == 0:
                 print(f"{idx_x} completed.")
             val_at_x_point = 0.0 + 0.0j
-            
+
             for j in range(len(self.mids)):
                 phi_j = self.phi[j]
                 t_a = self.param_intervals[j]
@@ -235,7 +211,7 @@ class IndirectBEM:
 
                 integral_G_dy = real_part + 1j * imag_part
                 val_at_x_point += phi_j * integral_G_dy
-                
+
             u_scattered[idx_x] = val_at_x_point
 
         return u_scattered
@@ -244,15 +220,15 @@ class IndirectBEM:
 def run_bem_test(start_point, end_point, alpha_rad, k, n):
     alpha_deg = np.rad2deg(alpha_rad)
     bem = IndirectBEM(start_point=start_point, end_point=end_point, alpha=alpha_rad, k=k, n=n)
-    
+
     # Density plots (phi)
     plt.figure(figsize=(12, 5))
     plt.suptitle(f'k={k}, normal=[{bem.normal[0]:.2f},{bem.normal[1]:.2f}], No. Elements={bem.N}, Angle={alpha_deg}°')
-    
+
     # Parameter values for plotting
     param_mids = np.array([(bem.param_intervals[i] + bem.param_intervals[i+1])/2 
                           for i in range(len(bem.param_intervals)-1)])
-    
+
     plt.subplot(1, 2, 1)
     plt.plot(param_mids, np.real(bem.phi), 'b.-', label='Re($\phi$)')
     plt.plot(param_mids, np.imag(bem.phi), 'r.-', label='Im($\phi$)')
@@ -261,7 +237,7 @@ def run_bem_test(start_point, end_point, alpha_rad, k, n):
     plt.legend()
     plt.grid(True)
     plt.title('Solved Density $\phi$')
-    
+
     plt.subplot(1, 2, 2)
     plt.plot(param_mids, np.abs(bem.phi), 'g.-', label='$|\phi|$')
     plt.xlabel('Parameter $t$ along boundary')
@@ -278,7 +254,7 @@ def run_bem_test(start_point, end_point, alpha_rad, k, n):
     all_coords = np.vstack([bem.start_point, bem.end_point])
     x_min, x_max = all_coords[:, 0].min() - 2, all_coords[:, 0].max() + 2
     y_min, y_max = all_coords[:, 1].min() - 2, all_coords[:, 1].max() + 2
-    
+
     x_coords = np.linspace(x_min, x_max, grid_res)
     y_coords = np.linspace(y_min, y_max, grid_res)
     X_grid, Y_grid = np.meshgrid(x_coords, y_coords)
@@ -299,7 +275,7 @@ def run_bem_test(start_point, end_point, alpha_rad, k, n):
     ax1 = plt.subplot(1, 3, 1)
     arrow_skip = max(1, grid_res // 10)
     X_q, Y_q = X_grid[::arrow_skip, ::arrow_skip], Y_grid[::arrow_skip, ::arrow_skip]
-    
+
     u_direction = np.cos(alpha_rad)
     v_direction = np.sin(alpha_rad)
     U_q = np.full_like(X_q, u_direction)
@@ -361,9 +337,6 @@ def run_bem_test(start_point, end_point, alpha_rad, k, n):
 
 
 if __name__ == '__main__':
-    # Horizontal line (equivalent to original [-1, 1] on x-axis)
-    run_bem_test([-1, 0], [1, 0], 0, 5.0, 100)
-
     # Vertical line
     run_bem_test([0, -1], [0, 1], np.pi/2, 8.0, 160)
 
