@@ -12,6 +12,7 @@ class IndirectBEM:
         self.start_point = np.array(start_point)  # [x1_start, x2_start]
         self.end_point = np.array(end_point)      # [x1_end, x2_end]
         self.alpha = alpha
+        self.offset_distance = 0.1 * np.linalg.norm(self.end_point - self.start_point) / self.N
 
         # Calculate line properties
         self.line_vector = self.end_point - self.start_point
@@ -26,12 +27,22 @@ class IndirectBEM:
         self.g_prime = np.zeros(self.N, dtype=complex)
         self.phi = np.zeros(self.N, dtype=complex)
         self.calc_A()
+        print(f"Condition number of A: {np.linalg.cond(self.A)}") 
         self.calc_g_prime()
         self.calc_phi()
+        if self.phi is not None:
+            print(f"Debug: Solved phi (first 5 elements): {self.phi[:5]}")
+            print(f"Debug: Solved phi magnitude (mean): {np.mean(np.abs(self.phi))}")
+            print(f"Debug: Solved phi magnitude (max): {np.max(np.abs(self.phi))}")
+            print(f"Debug: Solved phi magnitude (min): {np.min(np.abs(self.phi))}")
 
     def param_to_physical(self, t):
         """Convert parameter t ∈ [0, 1] to physical coordinates on the line segment."""
         return self.start_point + t * self.line_vector
+
+    def param_to_aux_physical(self, t):
+        """Convert parameter t ∈ [0, 1] to physical coordinates on the auxiliary line."""
+        return self.param_to_physical(t) - self.offset_distance * self.normal
 
     def physical_to_param(self, point):
         """Convert physical point to parameter t along the line segment."""
@@ -89,13 +100,13 @@ class IndirectBEM:
 
     def calc_physical_mids(self):
         """Calculate physical midpoints of each interval."""
-        param_mids = np.array([(self.param_intervals[i] + self.param_intervals[i+1])/2 
+        param_mids = np.array([(self.param_intervals[i] + self.param_intervals[i+1])/2
                               for i in range(len(self.param_intervals)-1)])
         self.mids = np.array([self.param_to_physical(t) for t in param_mids])
 
-    def kernel(self, x_point, y_point, normal_vec):
+    def kernel(self, x, y, normal_vec):
         """Kernel function for points in 2D space."""
-        diff = x_point - y_point
+        diff = x - y
         R = np.linalg.norm(diff)
 
         if np.isclose(R, 0):
@@ -122,10 +133,10 @@ class IndirectBEM:
         # Normal derivative
         self.g_prime = -(self.normal[0] * duinc_dx1 + self.normal[1] * duinc_dx2)
 
-    def f_y_param(self, t, x_point, normal_vec):
+    def f_y_param(self, t, x, normal_vec):
         """Integrand function in parameter space."""
-        y_point = self.param_to_physical(t)
-        diff = x_point - y_point
+        y = self.param_to_physical(t)
+        diff = x - y
         R = np.linalg.norm(diff)
 
         if np.isclose(R, 0.0):
@@ -143,34 +154,32 @@ class IndirectBEM:
     def calc_A(self):
         """Calculate the matrix A."""
         for i in range(len(self.mids)):
-            self.A[i, i] = 0.5 + 0.0j
+            x_collocation_point = self.mids[i]
+            normal_at_x_collocation = self.normal
 
-            # Off-diagonal elements
             for j in range(len(self.mids)):
-                
-                if i == j:
-                    continue
-
                 t_a_j = self.param_intervals[j]
                 t_b_j = self.param_intervals[j+1]
 
-                def kernel_real_param(t, x_pt, n_vec):
-                    y_pt = self.param_to_physical(t)
-                    return np.real(self.kernel(x_pt, y_pt, n_vec)) * self.line_length
+                def kernel_real_param_aux(t_param_source, x_coll_pt, normal_at_x_coll_pt):
+                    y_source_pt_aux = self.param_to_aux_physical(t_param_source)
+                    return np.real(self.kernel(x_coll_pt, y_source_pt_aux, normal_at_x_coll_pt)) * self.line_length
 
-                def kernel_imag_param(t, x_pt, n_vec):
-                    y_pt = self.param_to_physical(t)
-                    return np.imag(self.kernel(x_pt, y_pt, n_vec)) * self.line_length
+                def kernel_imag_param_aux(t_param_source, x_coll_pt, normal_at_x_coll_pt):
+                    y_source_pt_aux = self.param_to_aux_physical(t_param_source)
+                    return np.imag(self.kernel(x_coll_pt, y_source_pt_aux, normal_at_x_coll_pt)) * self.line_length
 
-                real_part, _ = quad(kernel_real_param, t_a_j, t_b_j, args=(self.mids[i], self.normal))
-                imag_part, _ = quad(kernel_imag_param, t_a_j, t_b_j, args=(self.mids[i], self.normal))
+                # Numerical integration over the j-th source element on Gamma_aux
+                real_part, _ = quad(kernel_real_param_aux, t_a_j, t_b_j,
+                                    args=(x_collocation_point, normal_at_x_collocation))
+                imag_part, _ = quad(kernel_imag_param_aux, t_a_j, t_b_j,
+                                    args=(x_collocation_point, normal_at_x_collocation))
 
                 self.A[i, j] = real_part + 1j * imag_part
 
     def calc_phi(self):
         try:
             self.phi = np.linalg.solve(self.A, self.g_prime)
-            return self.phi
         except np.linalg.LinAlgError as e:
             print(f"Error solving linear system: {e}")
             return None
@@ -188,10 +197,10 @@ class IndirectBEM:
         """Calculate scattered field at evaluation points x."""
         u_scattered = np.zeros(len(x), dtype=complex)
 
-        for idx_x, x_point in enumerate(x):
+        for idx_x, x in enumerate(x):
             if idx_x % 100 == 0:
                 print(f"{idx_x} completed.")
-            val_at_x_point = 0.0 + 0.0j
+            val_at_x = 0.0 + 0.0j
 
             for j in range(len(self.mids)):
                 phi_j = self.phi[j]
@@ -199,20 +208,20 @@ class IndirectBEM:
                 t_b = self.param_intervals[j+1]
 
                 def green_real_param(t, x_pt):
-                    y_pt = self.param_to_physical(t)
+                    y_pt = self.param_to_aux_physical(t)
                     return np.real(self.green_function(x_pt, y_pt)) * self.line_length
 
                 def green_imag_param(t, x_pt):
-                    y_pt = self.param_to_physical(t)
+                    y_pt = self.param_to_aux_physical(t)
                     return np.imag(self.green_function(x_pt, y_pt)) * self.line_length
 
-                real_part, _ = quad(green_real_param, t_a, t_b, args=(x_point,))
-                imag_part, _ = quad(green_imag_param, t_a, t_b, args=(x_point,))
+                real_part, _ = quad(green_real_param, t_a, t_b, args=(x,))
+                imag_part, _ = quad(green_imag_param, t_a, t_b, args=(x,))
 
                 integral_G_dy = real_part + 1j * imag_part
-                val_at_x_point += phi_j * integral_G_dy
+                val_at_x += phi_j * integral_G_dy
 
-            u_scattered[idx_x] = val_at_x_point
+            u_scattered[idx_x] = val_at_x
 
         return u_scattered
 
@@ -249,7 +258,7 @@ def run_bem_test(start_point, end_point, alpha_rad, k, n):
     plt.show()
 
     # Field plots
-    grid_res = 50
+    grid_res = 60
     # Determine plot bounds based on line segment
     all_coords = np.vstack([bem.start_point, bem.end_point])
     x_min, x_max = all_coords[:, 0].min() - 2, all_coords[:, 0].max() + 2
@@ -338,7 +347,7 @@ def run_bem_test(start_point, end_point, alpha_rad, k, n):
 
 if __name__ == '__main__':
     # Vertical line
-    run_bem_test([0, -1], [0, 1], np.pi/2, 8.0, 160)
+    # run_bem_test([-1, 0], [1, 0], np.pi/2, 8.0, 160)
 
     # Diagonal line
-    run_bem_test([-1, -1], [1, 1], np.pi/6, 10.0, 200)
+    run_bem_test([-1, 1], [1, -1], np.pi/6, 10.0, 200)
