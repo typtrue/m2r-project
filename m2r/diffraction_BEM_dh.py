@@ -36,11 +36,15 @@ class HelmholtzSystem:
         w, x = r
         y, z = r_0
 
-        s1 = (2 * sci_sp.hankel1(1, self.k * np.linalg.norm(r - r_0))) / (np.linalg.norm(r - r_0) ** 3)
+        # s1 = (2 * sci_sp.hankel1(1, self.k * np.linalg.norm(r - r_0))) / (np.linalg.norm(r - r_0) ** 3)
 
-        s2 = (self.k * (sci_sp.hankel1(0, self.k * np.linalg.norm(r - r_0)) - sci_sp.hankel1(2, self.k * np.linalg.norm(r - r_0)))) / (np.linalg.norm(r - r_0) ** 2)
+        # s2 = (self.k * (sci_sp.hankel1(0, self.k * np.linalg.norm(r - r_0)) - sci_sp.hankel1(2, self.k * np.linalg.norm(r - r_0)))) / (np.linalg.norm(r - r_0) ** 2)
 
-        return (1.0j * self.k * (x - z) * (w - y) / 8) * (s1 - s2)
+        # return (1.0j * self.k * (x - z) * (w - y) / 8) * (s1 - s2)
+
+        s = sci_sp.hankel1(0, self.k * np.linalg.norm(r - r_0)) - sci_sp.hankel1(2, self.k * np.linalg.norm(r - r_0))
+
+        return (1.0j * self.k ** 2 * (x - z) ** 2 * s) / (8 * np.linalg.norm(r - r_0) ** 2)
 
     def BEM(self):
         """Initialise the BIE and solve using BEM."""
@@ -86,7 +90,7 @@ class HelmholtzSystem:
             #
             # WIP
 
-            diag = -1.0j * self.k ** 2 * (np.pi + 2.0j * (np.log(1 / N) + np.log(self.k / 2) - 1)) / (2 * np.pi * N)
+            diag = 1.0j * self.k ** 2 * (np.pi + 2.0j * (np.log(1 / N) + np.log(self.k / 2) - 1)) / (2 * np.pi * N)
 
 
             for i in range(N):
@@ -132,7 +136,7 @@ class HelmholtzSystem:
 
     def plot_uscat(self, n=50, inp_range=(-3, 3), *, totalu=False):
         xvals = np.linspace(inp_range[0], inp_range[1], n)
-        yvals = np.linspace(inp_range[0], inp_range[1], n)
+        yvals = np.linspace(0.01, inp_range[1], n)
 
         x, y = np.meshgrid(xvals, yvals)
 
@@ -185,11 +189,14 @@ class HelmholtzSystem:
 ## TESTING ##
 #############
 
-
+k = 50
 # wave number
-k = 10
 
-sys = HelmholtzSystem(k, "D")
+sys = HelmholtzSystem(k, "D") # dirichlet
+sys2 = HelmholtzSystem(k, "N") # neumann
 
 # sys.plot_uscat()
+# sys2.plot_uscat()
+
 sys.amplitude_sample()
+sys2.amplitude_sample()
