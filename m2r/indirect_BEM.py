@@ -27,14 +27,8 @@ class IndirectBEM:
         self.g_prime = np.zeros(self.N, dtype=complex)
         self.phi = np.zeros(self.N, dtype=complex)
         self.calc_A()
-        print(f"Condition number of A: {np.linalg.cond(self.A)}") 
         self.calc_g_prime()
         self.calc_phi()
-        if self.phi is not None:
-            print(f"Debug: Solved phi (first 5 elements): {self.phi[:5]}")
-            print(f"Debug: Solved phi magnitude (mean): {np.mean(np.abs(self.phi))}")
-            print(f"Debug: Solved phi magnitude (max): {np.max(np.abs(self.phi))}")
-            print(f"Debug: Solved phi magnitude (min): {np.min(np.abs(self.phi))}")
 
     def param_to_physical(self, t):
         """Convert parameter t ∈ [0, 1] to physical coordinates on the line segment."""
