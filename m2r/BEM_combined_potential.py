@@ -9,7 +9,7 @@ import mayavi.mlab as mlab
 class HelmholtzSystem:
     def __init__(self, wave_no: float, bcs="D") -> None:
         self.k = wave_no
-        self.N = np.floor(10 * wave_no)
+        self.N = int(np.floor(10 * wave_no))
         self.bcs = bcs
 
         # check if boundary conditions are dirichlet or neumann
@@ -29,7 +29,7 @@ class HelmholtzSystem:
         w, x = r
         y, z = r_0
 
-        return 1.0j * self.k * (z - x) * sci_sp.hankel1(1, self.k * np.linalg.norm(r - r_0)) / (4 * np.linalg.norm(r - r_0))
+        return 1.0j * self.k * (x - z) * sci_sp.hankel1(1, self.k * np.linalg.norm(r - r_0)) / (4 * np.linalg.norm(r - r_0))
 
     def D2G(self, r, r_0):
         """Second partial derivative of Green function, once wrt y in first variable, once wrt y in second."""
@@ -56,11 +56,11 @@ class HelmholtzSystem:
 
         # set up vector for matrix eqn. based on bcs
         if bc == "D":
-            c = -np.ones(N, dtype=np.complex64)  # boundary condition u_i(x) = 1 on gamma
+            c = -np.ones(N, dtype=complex)  # boundary condition u_i(x) = 1 on gamma
         elif bc == "N":
-            c = -1.0j * self.k * np.ones(N, dtype=np.complex64)  # boundary condition du_i/dy = ik on gamma
+            c = -1.0j * self.k * np.ones(N, dtype=complex)  # boundary condition du_i/dy = ik on gamma
 
-        A = np.zeros((N, N), dtype=np.complex64)
+        A = np.zeros((N, N), dtype=complex)
 
         if bc == "D":
             # dirichlet problem:
@@ -69,16 +69,16 @@ class HelmholtzSystem:
 
             # analytical solution for the diagonal
             # diag = - self.k * (1 / (2 * N) + 2.0j * (np.log(self.k / (2 * N)) + np.euler_gamma - 1) / (np.pi * N))
-            diag = -self.k * (np.pi + 2.0j * (np.log(1 / N) + np.log(self.k / 2) - 1)) / (2 * np.pi * N)
+            diag = - (np.pi + 2.0j * (np.log(1 / N) + np.log(self.k / 2) + np.euler_gamma - 1)) / (2 * np.pi * N)
 
             for i in range(N):
                 # we require real and imaginary parts of the function as scipy.integrate.quad() supports real-valued functions only
-                def f_r(x): return (1.0j * self.k * self.G(np.array([nodes[i], 0]), np.array([x, 0])) - self.DG(np.array([nodes[i], 0]), np.array([x, 0]))).real
-                def f_i(x): return (1.0j * self.k * self.G(np.array([nodes[i], 0]), np.array([x, 0])) - self.DG(np.array([nodes[i], 0]), np.array([x, 0]))).imag
+                def f_r(x): return (1.0j * self.G(np.array([nodes[i], 0]), np.array([x, 0])) - self.DG(np.array([nodes[i], 0]), np.array([x, 0]))).real
+                def f_i(x): return (1.0j * self.G(np.array([nodes[i], 0]), np.array([x, 0])) - self.DG(np.array([nodes[i], 0]), np.array([x, 0]))).imag
 
                 for j in range(N):
                     if i != j:
-                        A[i, j] = sci_int.quad(f_r, nodes[j] - 1/N, nodes[j] + 1/N, limit=np.floor(4*N))[0] + 1.0j*sci_int.quad(f_i, nodes[j] - 1/N, nodes[j] + 1/N, limit=np.floor(4*N))[0]
+                        A[i, j] = sci_int.quad(f_r, nodes[j] - 1/N, nodes[j] + 1/N, limit=np.floor(4*N))[0] + 1.0j * sci_int.quad(f_i, nodes[j] - 1/N, nodes[j] + 1/N, limit=np.floor(4*N))[0]
                     else:
                         # TODO: find analytical solution for i = j to avoid integrating over singularity
                         A[i, j] = diag
@@ -90,12 +90,11 @@ class HelmholtzSystem:
             #
             # WIP
 
-            diag = 1.0j * self.k ** 2 * (np.pi + 2.0j * (np.log(1 / N) + np.log(self.k / 2) - 1)) / (2 * np.pi * N)
-
+            diag = - 1.0j * self.k ** 2 * (np.pi + 2.0j * (np.log(1 / N) + np.log(self.k / 2) + np.euler_gamma - 1)) / (2 * np.pi * N)
 
             for i in range(N):
-                def f_r(x): return (-self.k ** 2 * self.G(np.array([nodes[i], 0]), np.array([x, 0])) + 1.0j * self.k * self.DG(np.array([x, 0]), np.array([nodes[i], 0])) + self.D2G(np.array([nodes[i], 0]), np.array([x, 0]))).real
-                def f_i(x): return (-self.k ** 2 * self.G(np.array([nodes[i], 0]), np.array([x, 0])) + 1.0j * self.k * self.DG(np.array([x, 0]), np.array([nodes[i], 0])) + self.D2G(np.array([nodes[i], 0]), np.array([x, 0]))).imag
+                def f_r(x): return (1.0j * self.DG(np.array([x, 0]), np.array([nodes[i], 0])) - self.k ** 2 * self.G(np.array([nodes[i], 0]), np.array([x, 0])) + self.D2G(np.array([nodes[i], 0]), np.array([x, 0]))).real
+                def f_i(x): return (1.0j * self.DG(np.array([x, 0]), np.array([nodes[i], 0])) - self.k ** 2 * self.G(np.array([nodes[i], 0]), np.array([x, 0])) + self.D2G(np.array([nodes[i], 0]), np.array([x, 0]))).imag
                 for j in range(N):
                     if i != j:
                         A[i, j] = sci_int.quad(f_r, nodes[j] - 1/N, nodes[j] + 1/N, limit=np.floor(4*N))[0] + 1.0j*sci_int.quad(f_i, nodes[j] - 1/N, nodes[j] + 1/N, limit=np.floor(4*N))[0]
@@ -103,7 +102,7 @@ class HelmholtzSystem:
                         # TODO: find analytical solution for i = j to avoid integrating over singularity
                         A[i, j] = diag
                 print(A[i, i])
-            B = 1.0j * self.k * np.identity(N) / 2 - A
+            B = 1.0j * np.identity(N) / 2 - A
         return c, B
 
     def weight(self, x):
@@ -128,15 +127,15 @@ class HelmholtzSystem:
         # this also yields a more accurate estimate
 
         for i in range(self.N):
-            def f_r(x): return ((self.DG(r, np.array([x, 0])) - 1.0j * self.k * self.G(r, np.array([x, 0]))) * self.weights[i]).real
-            def f_i(x): return ((self.DG(r, np.array([x, 0])) - 1.0j * self.k * self.G(r, np.array([x, 0]))) * self.weights[i]).imag
+            def f_r(x): return ((self.DG(r, np.array([x, 0])) - 1.0j * self.G(r, np.array([x, 0]))) * self.weights[i]).real
+            def f_i(x): return ((self.DG(r, np.array([x, 0])) - 1.0j * self.G(r, np.array([x, 0]))) * self.weights[i]).imag
             sum += sci_int.quad(f_r, antinodes[i], antinodes[i+1], limit=100)[0] + 1.0j * sci_int.quad(f_i, antinodes[i], antinodes[i+1], limit=100)[0]
 
         return sum
 
-    def plot_uscat(self, n=50, inp_range=(-3, 3), *, totalu=False):
+    def plot_uscat(self, n=50, *, inp_range=(-3, 3), totalu=False):
         xvals = np.linspace(inp_range[0], inp_range[1], n)
-        yvals = np.linspace(0.01, inp_range[1], n)
+        yvals = np.linspace(inp_range[0], inp_range[1], n)
 
         x, y = np.meshgrid(xvals, yvals)
 
@@ -146,6 +145,8 @@ class HelmholtzSystem:
 
         print(z_vals)
         print(len(z_vals))
+
+        print(self.weights)
 
         for i in range(len(z_vals)):
             if totalu:
@@ -161,12 +162,16 @@ class HelmholtzSystem:
 
         mlab.show()
 
-    def amplitude_sample(self, n=1000, r=10**4):
+    def amplitude_sample(self, n=1000, r=10**4, *, absolute=False):
         x_vals = np.linspace(0, 2*np.pi, n, endpoint=False)
         y_vals = np.ones(n)
         for i in range(len(y_vals)):
             pos = (r*np.cos(x_vals[i]), r*np.sin(x_vals[i]))
-            y_vals[i] = (self.u_scat(pos) * np.sqrt(r) / np.exp(1.0j * self.k * r)).real
+
+            if absolute:
+                y_vals[i] = abs((self.u_scat(pos) * np.sqrt(r) / np.exp(1.0j * self.k * r)).real)
+            else:
+                y_vals[i] = (self.u_scat(pos) * np.sqrt(r) / np.exp(1.0j * self.k * r)).real
 
             if i % 100 == 0:
                 print(f"{i}/{n}")
@@ -189,14 +194,14 @@ class HelmholtzSystem:
 ## TESTING ##
 #############
 
-k = 50
+k = 10.0
 # wave number
 
-sys = HelmholtzSystem(k, "D") # dirichlet
-sys2 = HelmholtzSystem(k, "N") # neumann
+sys = HelmholtzSystem(k, "N") # dirichlet
+# sys2 = HelmholtzSystem(k, "N") # neumann
 
-# sys.plot_uscat()
+sys.plot_uscat(50, totalu=True)
 # sys2.plot_uscat()
 
-sys.amplitude_sample()
-sys2.amplitude_sample()
+sys.amplitude_sample(r=10**7, absolute=False)
+# sys2.amplitude_sample(r=10**7)
