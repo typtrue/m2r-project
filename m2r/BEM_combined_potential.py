@@ -93,8 +93,8 @@ class HelmholtzSystem:
             diag = - 1.0j * self.k ** 2 * (np.pi + 2.0j * (np.log(1 / N) + np.log(self.k / 2) + np.euler_gamma - 1)) / (2 * np.pi * N)
 
             for i in range(N):
-                def f_r(x): return (1.0j * self.DG(np.array([x, 0]), np.array([nodes[i], 0])) - self.k ** 2 * self.G(np.array([nodes[i], 0]), np.array([x, 0])) + self.D2G(np.array([nodes[i], 0]), np.array([x, 0]))).real
-                def f_i(x): return (1.0j * self.DG(np.array([x, 0]), np.array([nodes[i], 0])) - self.k ** 2 * self.G(np.array([nodes[i], 0]), np.array([x, 0])) + self.D2G(np.array([nodes[i], 0]), np.array([x, 0]))).imag
+                def f_r(x): return (1.0j * self.DG(np.array([x, 0]), np.array([nodes[i], 0])) - self.k ** 2 * self.G(np.array([nodes[i], 0]), np.array([x, 0])) - self.D2G(np.array([nodes[i], 0]), np.array([x, 0]))).real
+                def f_i(x): return (1.0j * self.DG(np.array([x, 0]), np.array([nodes[i], 0])) - self.k ** 2 * self.G(np.array([nodes[i], 0]), np.array([x, 0])) - self.D2G(np.array([nodes[i], 0]), np.array([x, 0]))).imag
                 for j in range(N):
                     if i != j:
                         A[i, j] = sci_int.quad(f_r, nodes[j] - 1/N, nodes[j] + 1/N, limit=np.floor(4*N))[0] + 1.0j*sci_int.quad(f_i, nodes[j] - 1/N, nodes[j] + 1/N, limit=np.floor(4*N))[0]
@@ -200,7 +200,7 @@ k = 10.0
 sys = HelmholtzSystem(k, "N") # dirichlet
 # sys2 = HelmholtzSystem(k, "N") # neumann
 
-sys.plot_uscat(50, totalu=True)
+sys.plot_uscat(200, totalu=True)
 # sys2.plot_uscat()
 
 sys.amplitude_sample(r=10**7, absolute=False)
