@@ -4,41 +4,16 @@
     <ul>
         <li>Michael Williams</li>
         <li>Kane Rowley</li>
-        <li>Jizhao He</li>
         <li>Dan Haywood</li>
     </ul>
 </div>
 
-<details>
-    <summary>Table of Contents</summary>
-    <ol>
-        <li>
-            <a href="#about-the-project">About the Project</a>
-        </li>
-        <li>
-            <a href="#section-1">Section 1 (wip)</a>
-        </li>
-        <li>
-            <a href="#section-2">Section 2 (wip)</a>
-        </li>
-        <li>
-            <a href="#acknowledgments">Acknowledgments</a>
-        </li>
-    </ol>
-</details>
-
 ## About the Project
 
-wip
+This is the repository containing code used for our 2nd year research project.
+This repo contains code used to generate figures for the report / presentation, as well as
+code that computes numerical solutions to the problem posed in our project.
+All code contained in this repo was written by Dan Haywood and Michael Williams.
 
-## Section 1
-
-wip
-
-## Section 2
-
-wip
-
-## Acknowledgments
-
-wip
+We make use of the `mayavi` and `matplotlib` packages to plot results and figures,
+and the `numpy` and `scipy` packages for general calculation purposes.
