@@ -153,8 +153,8 @@ class IndirectBEM:
     def calc_A(self):
         """Calculate the matrix A."""
         for i in range(self.N):
-            x_collocation_point = self.mids[i]
-            normal_at_x_collocation = self.normals[self.mid_interval_indices[i]]
+            x_mid_point = self.mids[i]
+            normal_at_x_mid = self.normals[self.mid_interval_indices[i]]
 
             for j in range(self.N):
                 t_a_j, t_b_j = self.element_param_bounds[j]
@@ -171,9 +171,9 @@ class IndirectBEM:
 
                 # Numerical integration over the j-th source element on Gamma_aux
                 real_part, _ = quad(kernel_real_param_aux, t_a_j, t_b_j,
-                                    args=(x_collocation_point, normal_at_x_collocation, interval_idx_j))
+                                    args=(x_mid_point, normal_at_x_mid, interval_idx_j))
                 imag_part, _ = quad(kernel_imag_param_aux, t_a_j, t_b_j,
-                                    args=(x_collocation_point, normal_at_x_collocation, interval_idx_j))
+                                    args=(x_mid_point, normal_at_x_mid, interval_idx_j))
 
                 self.A[i, j] = real_part + 1j * imag_part
 
