@@ -169,7 +169,7 @@ class HelmholtzSystem:
             pos = (r*np.cos(x_vals[i]), r*np.sin(x_vals[i]))
 
             if absolute:
-                y_vals[i] = abs((self.u_scat(pos) * np.sqrt(r) / np.exp(1.0j * self.k * r)).real)
+                y_vals[i] = abs(self.u_scat(pos) * np.sqrt(r) / np.exp(1.0j * self.k * r))
             else:
                 y_vals[i] = (self.u_scat(pos) * np.sqrt(r) / np.exp(1.0j * self.k * r)).real
 
@@ -177,9 +177,9 @@ class HelmholtzSystem:
                 print(f"{i}/{n}")
 
         fig, ax = plt.subplots()
-        ax.plot(x_vals, y_vals)
-        ax.set_xlabel("Angle from center")
-        ax.set_ylabel("Amplitude function")
+        ax.plot(x_vals, y_vals, linewidth=2)
+        ax.set_xlabel("Angle from center θ", fontsize=15)
+        ax.set_ylabel("Absolute value of amplitude function |A(θ)|", fontsize=15)
 
         ticks = np.linspace(0, 2*np.pi, 5)
         xlabels = ["0", "π/2", "π", "3π/2", "2π"]
@@ -194,7 +194,7 @@ class HelmholtzSystem:
 ## TESTING ##
 #############
 
-k = 10.0
+k = 25.00
 # wave number
 
 sys = HelmholtzSystem(k, "N") # dirichlet
@@ -203,5 +203,5 @@ sys = HelmholtzSystem(k, "N") # dirichlet
 sys.plot_uscat(200, totalu=True)
 # sys2.plot_uscat()
 
-sys.amplitude_sample(r=10**7, absolute=False)
+# sys.amplitude_sample(r=10**7, absolute=True)
 # sys2.amplitude_sample(r=10**7)
