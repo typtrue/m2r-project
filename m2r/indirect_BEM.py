@@ -3,6 +3,7 @@ from scipy.special import hankel1
 from math import e, cos, sin
 from scipy.integrate import quad
 import matplotlib.pyplot as plt
+import mayavi.mlab as ml
 
 
 class IndirectBEM:
@@ -226,65 +227,27 @@ class IndirectBEM:
         return u_scattered
 
 
-def run_bem_test(intervals, alpha_rad, k, n):
+def plot_mayavi_surface(x_grid, y_grid, u_tot, bem):
+    """Plot the total field magnitude as a 3D surface using Mayavi."""
+    s = ml.surf(x_grid.T, y_grid.T, u_tot.T)
+    ml.show()
+
+
+def plot_wave_effects(x_grid, y_grid, u_tot, bem, alpha_rad, k):
+    """Plot the incident wave path and total field magnitude using Matplotlib."""
     alpha_deg = np.rad2deg(alpha_rad)
-    bem = IndirectBEM(intervals=intervals, alpha=alpha_rad, k=k, n=n)
-
-    # Density plots (phi)
-    plt.figure(figsize=(12, 5))
-    title_normals = '; '.join([f"n{i}=[{norm[0]:.2f},{norm[1]:.2f}]" for i, norm in enumerate(bem.normals)])
-    plt.suptitle(f'k={k}, {title_normals}, Total Elements={bem.N}, Angle={alpha_deg}°')
-
-    # Use global element index for plotting
-    element_indices = np.arange(bem.N)
-
-    plt.subplot(1, 2, 1)
-    plt.plot(element_indices, np.real(bem.phi), 'b.-', label='Re($\phi$)')
-    plt.plot(element_indices, np.imag(bem.phi), 'r.-', label='Im($\phi$)')
-    plt.xlabel('Global Element Index')
-    plt.ylabel('Density $\phi$')
-    plt.legend()
-    plt.grid(True)
-    plt.title('Solved Density $\phi$')
-
-    plt.subplot(1, 2, 2)
-    plt.plot(element_indices, np.abs(bem.phi), 'g.-', label='$|\phi|$')
-    plt.xlabel('Global Element Index')
-    plt.ylabel('Magnitude $|\phi|$')
-    plt.legend()
-    plt.grid(True)
-    plt.title('Magnitude of $\phi$')
-    plt.tight_layout(rect=[0, 0, 1, 0.96])
-    plt.show()
-
-    # Field plots
-    grid_res = 60
-    # Determine plot bounds based on all line segments
-    all_coords = np.vstack([p for interval in bem.intervals for p in interval])
-    x_min, x_max = all_coords[:, 0].min() - 2, all_coords[:, 0].max() + 2
-    y_min, y_max = all_coords[:, 1].min() - 2, all_coords[:, 1].max() + 2
-
-    x_coords = np.linspace(x_min, x_max, grid_res)
-    y_coords = np.linspace(y_min, y_max, grid_res)
-    X_grid, Y_grid = np.meshgrid(x_coords, y_coords)
-    eval_points_grid = np.vstack([X_grid.ravel(), Y_grid.ravel()]).T
-
-    u_inc_grid = bem.incident_field(eval_points_grid[:, 0], eval_points_grid[:, 1], alpha_rad)
-
-    print(f"Calculating scattered field on a {grid_res}x{grid_res} grid...")
-    u_scat_grid = bem.calc_u_scat(eval_points_grid)
-    U_scat_magnitude = np.abs(u_scat_grid).reshape(X_grid.shape)
-
-    U_total_magnitude = np.abs(u_inc_grid + u_scat_grid).reshape(X_grid.shape)
+    x_coords = x_grid[0, :]
+    y_coords = y_grid[:, 0]
 
     title_intervals = '; '.join([f"[{s.tolist()}] to [{e.tolist()}]" for s, e in bem.intervals])
-    plt.figure(figsize=(21, 6))
+    plt.figure(figsize=(14, 6))
     plt.suptitle(f'Wave Fields (k={k}, Lines from {title_intervals}, Angle={alpha_deg}°)', fontsize=14)
 
     # Subplot 1: Incident Wave Path (Arrows) + Boundaries
-    ax1 = plt.subplot(1, 3, 1)
+    ax1 = plt.subplot(1, 2, 1)
+    grid_res = x_grid.shape[0]
     arrow_skip = max(1, grid_res // 10)
-    X_q, Y_q = X_grid[::arrow_skip, ::arrow_skip], Y_grid[::arrow_skip, ::arrow_skip]
+    X_q, Y_q = x_grid[::arrow_skip, ::arrow_skip], y_grid[::arrow_skip, ::arrow_skip]
 
     u_direction = np.cos(alpha_rad)
     v_direction = np.sin(alpha_rad)
@@ -303,32 +266,46 @@ def run_bem_test(intervals, alpha_rad, k, n):
     ax1.set_ylim(y_coords.min(), y_coords.max())
     ax1.set_aspect('equal', adjustable='box')
 
-    # Subplot 2: Scattered Field Magnitude
-    ax2 = plt.subplot(1, 3, 2)
-    im_scat = ax2.imshow(U_scat_magnitude, extent=[x_coords.min(), x_coords.max(), y_coords.min(), y_coords.max()],
-                         origin='lower', aspect='auto', cmap='viridis', interpolation='nearest')
-    plt.colorbar(im_scat, ax=ax2, label='$|u_{scat}|$')
+    # Subplot 2: Total Field Magnitude
+    ax2 = plt.subplot(1, 2, 2)
+    im_total = ax2.imshow(u_tot, extent=[x_coords.min(), x_coords.max(), y_coords.min(), y_coords.max()],
+                          origin='lower', aspect='auto', cmap='viridis', interpolation='nearest')
+    plt.colorbar(im_total, ax=ax2, label='$|u_{total}|$')
     for start, end in bem.intervals:
         ax2.plot([start[0], end[0]], [start[1], end[1]], 'r-', linewidth=3)
     ax2.set_xlabel('$x_1$')
     ax2.set_ylabel('$x_2$')
-    ax2.set_title('Scattered Field Magnitude $|u_{scat}|$')
+    ax2.set_title('Total Field Magnitude $|u_{inc} + u_{scat}|$')
     ax2.set_aspect('equal', adjustable='box')
-
-    # Subplot 3: Total Field Magnitude
-    ax3 = plt.subplot(1, 3, 3)
-    im_total = ax3.imshow(U_total_magnitude, extent=[x_coords.min(), x_coords.max(), y_coords.min(), y_coords.max()],
-                          origin='lower', aspect='auto', cmap='viridis', interpolation='nearest')
-    plt.colorbar(im_total, ax=ax3, label='$|u_{total}|$')
-    for start, end in bem.intervals:
-        ax3.plot([start[0], end[0]], [start[1], end[1]], 'r-', linewidth=3)
-    ax3.set_xlabel('$x_1$')
-    ax3.set_ylabel('$x_2$')
-    ax3.set_title('Total Field Magnitude $|u_{inc} + u_{scat}|$')
-    ax3.set_aspect('equal', adjustable='box')
 
     plt.tight_layout(rect=[0, 0, 1, 0.95])
     plt.show()
+
+
+def run_bem_test(intervals, alpha_rad, k, n):
+    bem = IndirectBEM(intervals=intervals, alpha=alpha_rad, k=k, n=n)
+
+    # Field plots
+    grid_res = 40
+    # Determine plot bounds based on all line segments
+    all_coords = np.vstack([p for interval in bem.intervals for p in interval])
+    x_min, x_max = all_coords[:, 0].min() - 2, all_coords[:, 0].max() + 2
+    y_min, y_max = all_coords[:, 1].min() - 2, all_coords[:, 1].max() + 2
+
+    x_coords = np.linspace(x_min, x_max, grid_res)
+    y_coords = np.linspace(y_min, y_max, grid_res)
+    x_grid, y_grid = np.meshgrid(x_coords, y_coords)
+    eval_points_grid = np.vstack([x_grid.ravel(), y_grid.ravel()]).T
+
+    u_inc_grid = bem.incident_field(eval_points_grid[:, 0], eval_points_grid[:, 1], alpha_rad)
+
+    print(f"Calculating scattered field on a {grid_res}x{grid_res} grid...")
+    u_scat_grid = bem.calc_u_scat(eval_points_grid)
+
+    u_tot = np.abs(u_inc_grid + u_scat_grid).reshape(x_grid.shape)
+
+    plot_mayavi_surface(x_grid, y_grid, u_tot, bem)
+    plot_wave_effects(x_grid, y_grid, u_tot, bem, alpha_rad, k)
 
     print("-" * 70 + "\n")
     return bem
@@ -337,5 +314,5 @@ def run_bem_test(intervals, alpha_rad, k, n):
 if __name__ == '__main__':
     # Change to run with a set of intervals.
     intervals = [([-1, 1], [-0.1, 0.1]), ([0.1, -0.1], [1, -1]),
-                 ([2, 2], [3, 1]), ([1, -1], [2, -1])]
+                 ([1, -1], [2, -1])]
     run_bem_test(intervals, np.pi/4, 10.0, 200)
