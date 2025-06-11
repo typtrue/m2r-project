@@ -162,7 +162,7 @@ class HelmholtzSystem:
 
         mlab.show()
 
-    def amplitude_sample(self, n=1000, r=10**4, *, absolute=False):
+    def amplitude_sample(self, n=1000, r=10**7, *, absolute=False):
         x_vals = np.linspace(0, 2*np.pi, n, endpoint=False)
         y_vals = np.ones(n)
         for i in range(len(y_vals)):
@@ -187,21 +187,40 @@ class HelmholtzSystem:
 
         plt.show()
 
+    def edge_condition_plot(self, n=1000):
+        k = self.k
+        b = (0, -0.5)[self.bcs == "N"]
+        x_vals = [k**(-8*i/n + 2) for i in range(n)]
+
+        filtered = [x for x in x_vals if x >= 10**(-7) and x <= 10*3]
+
+        u_s = [abs(self.u_scat(np.array([1+x, -x])/np.sqrt(2))) for x in filtered]
+
+        bound = [x**b for x in filtered]
+        fig, ax = plt.subplots()
+        ax.set_xscale('log')
+        ax.set_yscale('log')
+        ax.set_xlabel('x')
+        ax.set_ylabel('y')
+        ax.plot(filtered, u_s, '-', label=r"$|u^{(s)}|$")
+        ax.plot(filtered, bound, '--', label="Bounding line")
+        ax.legend()
+        plt.show()
 
 
 
-#############
-## TESTING ##
-#############
 
-k = 25.00
+########################
+## TESTING & PLOTTING ##
+########################
+
+k = 10.00
 # wave number
 
-sys = HelmholtzSystem(k, "N") # dirichlet
-# sys2 = HelmholtzSystem(k, "N") # neumann
+sys = HelmholtzSystem(k, "D")
 
-sys.plot_uscat(200, totalu=True)
-# sys2.plot_uscat()
+# sys.plot_uscat(200, totalu=True)
 
-# sys.amplitude_sample(r=10**7, absolute=True)
-# sys2.amplitude_sample(r=10**7)
+sys.edge_condition_plot()
+
+# sys.amplitude_sample(absolute=True)
