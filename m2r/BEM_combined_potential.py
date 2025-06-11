@@ -208,8 +208,6 @@ class HelmholtzSystem:
         plt.show()
 
 
-
-
 ########################
 ## TESTING & PLOTTING ##
 ########################
