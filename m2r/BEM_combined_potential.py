@@ -15,10 +15,21 @@ class HelmholtzSystem:
         # check if boundary conditions are dirichlet or neumann
         if bcs not in "DN":
             raise NotImplementedError
+        
+        print("problem initialised")
 
         # solve using BEM for phi, our weight function
         self.c, self.B = self.BEM()
+
+        print("matrix system calculated")
+
+        # print(self.B)
+        # print(self.c)
+
         self.weights = np.linalg.solve(self.B, self.c)
+        print(self.weights)
+
+        print("matrix system solved")
 
     def G(self, x, y):
         """Green function for 2D Helmholtz."""
@@ -35,12 +46,6 @@ class HelmholtzSystem:
         """Second partial derivative of Green function, once wrt y in first variable, once wrt y in second."""
         w, x = r
         y, z = r_0
-
-        # s1 = (2 * sci_sp.hankel1(1, self.k * np.linalg.norm(r - r_0))) / (np.linalg.norm(r - r_0) ** 3)
-
-        # s2 = (self.k * (sci_sp.hankel1(0, self.k * np.linalg.norm(r - r_0)) - sci_sp.hankel1(2, self.k * np.linalg.norm(r - r_0)))) / (np.linalg.norm(r - r_0) ** 2)
-
-        # return (1.0j * self.k * (x - z) * (w - y) / 8) * (s1 - s2)
 
         s = sci_sp.hankel1(0, self.k * np.linalg.norm(r - r_0)) - sci_sp.hankel1(2, self.k * np.linalg.norm(r - r_0))
 
@@ -82,7 +87,8 @@ class HelmholtzSystem:
                     else:
                         # TODO: find analytical solution for i = j to avoid integrating over singularity
                         A[i, j] = diag
-                print(A[i, i])
+                if i % 10 == 0:
+                    print(f"{i}/{N}")
             B = np.identity(N) / 2 - A
 
         elif bc == "N":
@@ -92,17 +98,26 @@ class HelmholtzSystem:
 
             diag = - 1.0j * self.k ** 2 * (np.pi + 2.0j * (np.log(1 / N) + np.log(self.k / 2) + np.euler_gamma - 1)) / (2 * np.pi * N)
 
+            print(diag)
+
             for i in range(N):
-                def f_r(x): return (1.0j * self.DG(np.array([x, 0]), np.array([nodes[i], 0])) - self.k ** 2 * self.G(np.array([nodes[i], 0]), np.array([x, 0])) - self.D2G(np.array([nodes[i], 0]), np.array([x, 0]))).real
-                def f_i(x): return (1.0j * self.DG(np.array([x, 0]), np.array([nodes[i], 0])) - self.k ** 2 * self.G(np.array([nodes[i], 0]), np.array([x, 0])) - self.D2G(np.array([nodes[i], 0]), np.array([x, 0]))).imag
+                # def f_r(x): return (1.0j * self.DG(np.array([x, 0]), np.array([nodes[i], 0])) - self.k ** 2 * self.G(np.array([nodes[i], 0]), np.array([x, 0])) - self.D2G(np.array([nodes[i], 0]), np.array([x, 0]))).real
+                # def f_i(x): return (1.0j * self.DG(np.array([x, 0]), np.array([nodes[i], 0])) - self.k ** 2 * self.G(np.array([nodes[i], 0]), np.array([x, 0])) - self.D2G(np.array([nodes[i], 0]), np.array([x, 0]))).imag
+                def f_r(x): return (- self.k ** 2 * self.G(np.array([nodes[i], 0]), np.array([x, 0]))).real
+                def f_i(x): return (- self.k ** 2 * self.G(np.array([nodes[i], 0]), np.array([x, 0]))).imag
                 for j in range(N):
                     if i != j:
                         A[i, j] = sci_int.quad(f_r, nodes[j] - 1/N, nodes[j] + 1/N, limit=np.floor(4*N))[0] + 1.0j*sci_int.quad(f_i, nodes[j] - 1/N, nodes[j] + 1/N, limit=np.floor(4*N))[0]
                     else:
                         # TODO: find analytical solution for i = j to avoid integrating over singularity
                         A[i, j] = diag
-                print(A[i, i])
+                        # print(diag)
+                        # print(1.0j / 2 - diag)
+                if i % 10 == 0:
+                    print(f"{i}/{N}")
             B = 1.0j * np.identity(N) / 2 - A
+        
+        print(B)
         return c, B
 
     def weight(self, x):
@@ -133,7 +148,7 @@ class HelmholtzSystem:
 
         return sum
 
-    def plot_uscat(self, n=50, *, inp_range=(-3, 3), totalu=False):
+    def plot_uscat(self, n=40, *, inp_range=(-3, 3), totalu=False):
         xvals = np.linspace(inp_range[0], inp_range[1], n)
         yvals = np.linspace(inp_range[0], inp_range[1], n)
 
@@ -143,16 +158,11 @@ class HelmholtzSystem:
 
         z_vals = np.ones(len(stack))
 
-        print(z_vals)
-        print(len(z_vals))
-
-        print(self.weights)
-
         for i in range(len(z_vals)):
             if totalu:
                 z_vals[i] = (self.u_scat(stack[i]) + np.exp(1.0j * self.k * stack[i][1])).real
             else:
-                z_vals[i] = self.u_scat(stack[i]).real
+                z_vals[i] = self.u_scat(stack[i]).imag
             if i % 100 == 0:
                 print(f"{i}/{len(z_vals)}")
 
@@ -194,17 +204,24 @@ class HelmholtzSystem:
 
         filtered = [x for x in x_vals if x >= 10**(-7) and x <= 10*3]
 
-        u_s = [abs(self.u_scat(np.array([1+x, -x])/np.sqrt(2))) for x in filtered]
+        u_s = np.zeros(len(filtered))
+        for i in range(len(filtered)):
+            x = filtered[i]
+            u_s[i] = abs(self.u_scat(np.array([1+x, -x])/np.sqrt(2)))
+            if i%100 == 0:
+                print(f"{i}/{len(filtered)}")
 
-        bound = [x**b for x in filtered]
+
+        bound = [2*x**b for x in filtered]
         fig, ax = plt.subplots()
         ax.set_xscale('log')
         ax.set_yscale('log')
-        ax.set_xlabel('x')
-        ax.set_ylabel('y')
+        ax.set_xlabel(r"$||r - r_0||$", fontweight='bold', fontsize=15)
+        ax.set_ylabel(r"$|u^{(s)}|$", fontsize=15)
         ax.plot(filtered, u_s, '-', label=r"$|u^{(s)}|$")
         ax.plot(filtered, bound, '--', label="Bounding line")
         ax.legend()
+        ax.set_box_aspect(1)
         plt.show()
 
 
@@ -212,13 +229,13 @@ class HelmholtzSystem:
 ## TESTING & PLOTTING ##
 ########################
 
-k = 10.00
+k = 10
 # wave number
 
-sys = HelmholtzSystem(k, "D")
+sys = HelmholtzSystem(k, "N")
 
-# sys.plot_uscat(200, totalu=True)
+sys.plot_uscat(40, totalu=True)
 
-sys.edge_condition_plot()
+# sys.edge_condition_plot()
 
 # sys.amplitude_sample(absolute=True)
