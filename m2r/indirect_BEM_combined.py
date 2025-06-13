@@ -273,60 +273,100 @@ class IndirectBEM:
         """Calculate the matrix A."""
         k = self.k
         for i in range(self.N):
-            x_mid_i = self.mids[i]
+            x_mid_point = self.mids[i]
             normal_at_x_mid = self.normals[self.mid_interval_indices[i]]
-            bound = self.element_param_bounds[i]
-            L = self.line_lengths[self.mid_interval_indices[i]]
-            L_i = L * abs(bound[0] - bound[1])
-
-            diag = -L * L_i * 1.0j * self.k ** 2 * (np.pi + 2.0j * (np.log(L / 2) + np.log(self.k * L_i / 4) + np.euler_gamma - 1)) / (8 * np.pi)
-
-            # diag = L * L_i * k**2 * (2 * np.log((k * L * L_i) / 4) - 1.0j * np.pi + 2*np.euler_gamma - 2) / (4 * np.pi)
-            # print(diag)
 
             for j in range(self.N):
                 t_a_j, t_b_j = self.element_param_bounds[j]
-                segment_length = t_b_j - t_a_j
                 interval_idx_j = self.mid_interval_indices[j]
+                normal_at_x_mid = self.normals[self.mid_interval_indices[i]]
+                bound = self.element_param_bounds[i]
                 line_length_j = self.line_lengths[interval_idx_j]
+                L = self.line_lengths[self.mid_interval_indices[i]]
+                L_i = L * abs(bound[0] - bound[1])
 
-                x_mid_j = self.mids[j]
-                x_a_j, x_b_j = x_mid_i[0] + np.linalg.norm(x_mid_j - x_mid_i) - segment_length * line_length_j / 2, x_mid_i[0] + np.linalg.norm(x_mid_j - x_mid_i) + segment_length * line_length_j / 2
+                diag = -L * L_i * 1.0j * self.k ** 2 * (np.pi + 2.0j * (np.log(L / 2) + np.log(self.k * L_i / 4) + np.euler_gamma - 1)) / (8 * np.pi)
 
-                if i == j:
-                    self.A[i, i] = diag
-                    # print(diag)
-                    # print(1.0j / 2 - diag)
 
-                else: # PROBLEM LIES IN THESE INTERGRAL CALCULATIONS: TODO: 12/06/25 - FIX THESE INTEGRALS
-                    # def kernel_real_param(t_param_source, x_coll_pt, src_interval_idx):
-                    #     y_source_pt = self.param_to_physical(t_param_source, src_interval_idx)
-                    #     return np.real(-k**2 * self.G(x_coll_pt, y_source_pt)) * line_length_j
+                if i==j:
+                    self.A[i,i] = diag
 
-                    # def kernel_imag_param(t_param_source, x_coll_pt, src_interval_idx):
-                    #     y_source_pt = self.param_to_physical(t_param_source, src_interval_idx)
-                    #     return np.imag(-k**2 * self.G(x_coll_pt, y_source_pt)) * line_length_j
-                    
-                    def kernel_real(x_source):
-                        return np.real(-k**2 * self.G(x_mid_i, np.array([x_source, x_mid_i[1]])))
+                else:
 
-                    def kernel_imag(x_source):
-                        return np.imag(-k**2 * self.G(x_mid_i, np.array([x_source, x_mid_i[1]])))
+                    def kernel_real_param(t_param_source, x_coll_pt, normal_at_x_coll_pt, src_interval_idx):
+                        y_source_pt = self.param_to_physical(t_param_source, src_interval_idx)
+                        return np.real(-k**2 * self.G(x_coll_pt, y_source_pt)) * line_length_j
 
+                    def kernel_imag_param(t_param_source, x_coll_pt, normal_at_x_coll_pt, src_interval_idx):
+                        y_source_pt = self.param_to_physical(t_param_source, src_interval_idx)
+                        return np.imag(-k**2 * self.G(x_coll_pt, y_source_pt)) * line_length_j
 
                     # Numerical integration over the j-th source element on Gamma_aux
-                    real_part, _ = quad(kernel_real, x_a_j, x_b_j, limit=np.floor(4*self.N))
-                    imag_part, _ = quad(kernel_imag, x_a_j, x_b_j, limit=np.floor(4*self.N))
-
-                    # if i == self.N - j - 1:
-
-                    #     print(f"x_i: {x_mid_i}")
-                    #     print(f"x_j: {x_mid_j}")
-
-                    #     print(real_part)
-                    #     print(imag_part)
+                    real_part, _ = quad(kernel_real_param, t_a_j, t_b_j,
+                                        args=(x_mid_point, normal_at_x_mid, interval_idx_j))
+                    imag_part, _ = quad(kernel_imag_param, t_a_j, t_b_j,
+                                        args=(x_mid_point, normal_at_x_mid, interval_idx_j))
 
                     self.A[i, j] = real_part + 1j * imag_part
+
+    # def calc_A(self):
+    #     """Calculate the matrix A."""
+    #     k = self.k
+    #     for i in range(self.N):
+    #         x_mid_i = self.mids[i]
+    #         normal_at_x_mid = self.normals[self.mid_interval_indices[i]]
+    #         bound = self.element_param_bounds[i]
+    #         L = self.line_lengths[self.mid_interval_indices[i]]
+    #         L_i = L * abs(bound[0] - bound[1])
+
+    #         diag = -L * L_i * 1.0j * self.k ** 2 * (np.pi + 2.0j * (np.log(L / 2) + np.log(self.k * L_i / 4) + np.euler_gamma - 1)) / (8 * np.pi)
+
+    #         # diag = L * L_i * k**2 * (2 * np.log((k * L * L_i) / 4) - 1.0j * np.pi + 2*np.euler_gamma - 2) / (4 * np.pi)
+    #         # print(diag)
+
+    #         for j in range(self.N):
+    #             t_a_j, t_b_j = self.element_param_bounds[j]
+    #             segment_length = t_b_j - t_a_j
+    #             interval_idx_j = self.mid_interval_indices[j]
+    #             line_length_j = self.line_lengths[interval_idx_j]
+
+    #             x_mid_j = self.mids[j]
+    #             x_a_j, x_b_j = x_mid_i[0] + np.linalg.norm(x_mid_j - x_mid_i) - segment_length * line_length_j / 2, x_mid_i[0] + np.linalg.norm(x_mid_j - x_mid_i) + segment_length * line_length_j / 2
+
+    #             if i == j:
+    #                 self.A[i, i] = diag
+    #                 # print(diag)
+    #                 # print(1.0j / 2 - diag)
+
+    #             else: # PROBLEM LIES IN THESE INTERGRAL CALCULATIONS: TODO: 12/06/25 - FIX THESE INTEGRALS
+    #                 # def kernel_real_param(t_param_source, x_coll_pt, src_interval_idx):
+    #                 #     y_source_pt = self.param_to_physical(t_param_source, src_interval_idx)
+    #                 #     return np.real(-k**2 * self.G(x_coll_pt, y_source_pt)) * line_length_j
+
+    #                 # def kernel_imag_param(t_param_source, x_coll_pt, src_interval_idx):
+    #                 #     y_source_pt = self.param_to_physical(t_param_source, src_interval_idx)
+    #                 #     return np.imag(-k**2 * self.G(x_coll_pt, y_source_pt)) * line_length_j
+                    
+    #                 def kernel_real(x_source):
+    #                     return np.real(-k**2 * self.G(x_mid_i, np.array([x_source, x_mid_i[1]])))
+
+    #                 def kernel_imag(x_source):
+    #                     return np.imag(-k**2 * self.G(x_mid_i, np.array([x_source, x_mid_i[1]])))
+
+
+    #                 # Numerical integration over the j-th source element on Gamma_aux
+    #                 real_part, _ = quad(kernel_real, x_a_j, x_b_j, limit=np.floor(4*self.N))
+    #                 imag_part, _ = quad(kernel_imag, x_a_j, x_b_j, limit=np.floor(4*self.N))
+
+    #                 # if i == self.N - j - 1:
+
+    #                 #     print(f"x_i: {x_mid_i}")
+    #                 #     print(f"x_j: {x_mid_j}")
+
+    #                 #     print(real_part)
+    #                 #     print(imag_part)
+
+    #                 self.A[i, j] = real_part + 1j * imag_part
 
 
     def calc_phi(self):
@@ -499,5 +539,5 @@ if __name__ == '__main__':
     #              ([1, -1], [2, -1])]
     # run_bem_test(intervals, np.pi/4, 10.0, 200)
 
-    intervals = [([-1, 0], [1, 0])]
+    intervals = [([-1, 1], [1, -1])]
     run_bem_test(intervals, np.pi/3, 10.0, 200)
