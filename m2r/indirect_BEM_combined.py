@@ -456,9 +456,9 @@ def plot_wave_effects(x_grid, y_grid, u_tot, bem, alpha_rad, k):
     ax1.quiver(X_q, Y_q, U_q, V_q, angles='xy', scale_units='xy', scale=(k/1.5 or 5),
                color='cyan', headwidth=5, headlength=7, width=0.004, pivot='tail')
     for i, (start, end) in enumerate(bem.intervals):
-        ax1.plot([start[0], end[0]], [start[1], end[1]], 'r-', linewidth=3, label='Boundary $\Gamma$' if i == 0 else "_nolegend_")
-    ax1.set_xlabel('$x_1$')
-    ax1.set_ylabel('$x_2$')
+        ax1.plot([start[0], end[0]], [start[1], end[1]], 'r-', linewidth=3, label='Boundary $\gamma$' if i == 0 else "_nolegend_")
+    ax1.set_xlabel('$x$')
+    ax1.set_ylabel('$y$')
     ax1.set_title('Incident Wave Path')
     ax1.legend()
     ax1.set_xlim(x_coords.min(), x_coords.max())
@@ -472,9 +472,9 @@ def plot_wave_effects(x_grid, y_grid, u_tot, bem, alpha_rad, k):
     plt.colorbar(im_total, ax=ax2, label='$|u_{total}|$')
     for start, end in bem.intervals:
         ax2.plot([start[0], end[0]], [start[1], end[1]], 'r-', linewidth=3)
-    ax2.set_xlabel('$x_1$')
-    ax2.set_ylabel('$x_2$')
-    ax2.set_title('Total Field Magnitude $|u_{inc} + u_{scat}|$')
+    ax2.set_xlabel('$x$')
+    ax2.set_ylabel('$y$')
+    ax2.set_title('Real part of total field $Re(u_{inc} + u_{scat})$')
     ax2.set_aspect('equal', adjustable='box')
 
     plt.tight_layout(rect=[0, 0, 1, 0.95])
@@ -530,7 +530,7 @@ def run_bem_test(intervals, alpha_rad, k, n):
 
     u_tot = (u_scat_grid + u_inc_grid).reshape(x_grid.shape)
 
-    plot_mayavi_surface(x_grid, y_grid, u_tot, bem)
+    # plot_mayavi_surface(x_grid, y_grid, u_tot, bem)
     plot_wave_effects(x_grid, y_grid, u_tot, bem, alpha_rad, k)
     # amplitude_sample(bem)
 
@@ -544,5 +544,5 @@ if __name__ == '__main__':
     #              ([1, -1], [2, -1])]
     # run_bem_test(intervals, np.pi/4, 10.0, 200)
 
-    intervals = [([-1, 0], [-0.05, 0]), ([0.05, 0], [1, 0])]
+    intervals = [([-1, 0], [-0.3, 0]), ([0.3, 0], [1, 0])]
     run_bem_test(intervals, np.pi/2, 10.0, 400)
