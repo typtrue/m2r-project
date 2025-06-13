@@ -108,6 +108,8 @@ class HelmholtzSystem:
                 for j in range(N):
                     if i != j:
                         A[i, j] = sci_int.quad(f_r, nodes[j] - 1/N, nodes[j] + 1/N, limit=np.floor(4*N))[0] + 1.0j*sci_int.quad(f_i, nodes[j] - 1/N, nodes[j] + 1/N, limit=np.floor(4*N))[0]
+                        if i == 3 and j == 5:
+                            print(A[i,j])
                     else:
                         # TODO: find analytical solution for i = j to avoid integrating over singularity
                         A[i, j] = diag

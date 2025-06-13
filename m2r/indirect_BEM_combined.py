@@ -36,6 +36,8 @@ class IndirectBEM:
         self.calc_g_prime()
         self.calc_phi()
 
+        print(np.isclose(self.A, self.A.T))
+
         print(self.A)
 
         print(self.A[0, -1])
@@ -63,14 +65,14 @@ class IndirectBEM:
 
         return normal_deriv * (1j * self.k / 4.0) * hankel1(1, self.k * R)
 
-    def D2G(self, x, y, normal_vec):
+    def D2G(self, x, y, normal_vec_x, normal_vec_y):
         """Second partial derivative of Green function, once wrt y in first variable, once wrt y in second."""
         diff = x - y
         R = np.linalg.norm(diff)
 
         s = hankel1(0, self.k * R) - hankel1(2, self.k * R)
 
-        return (1.0j * self.k ** 2 * (np.dot(diff, normal_vec)) ** 2 * s) / (8 * R ** 2)
+        return (1.0j * self.k ** 2 * np.dot(diff, normal_vec_x) * np.dot(diff, normal_vec_y) * s) / (8 * R ** 2)
 
     # ------------------------------------------ #
 
@@ -279,7 +281,7 @@ class IndirectBEM:
             for j in range(self.N):
                 t_a_j, t_b_j = self.element_param_bounds[j]
                 interval_idx_j = self.mid_interval_indices[j]
-                normal_at_x_mid = self.normals[self.mid_interval_indices[i]]
+                normal_at_y_mid = self.normals[self.mid_interval_indices[j]]
                 bound = self.element_param_bounds[i]
                 line_length_j = self.line_lengths[interval_idx_j]
                 L = self.line_lengths[self.mid_interval_indices[i]]
@@ -293,19 +295,22 @@ class IndirectBEM:
 
                 else:
 
-                    def kernel_real_param(t_param_source, x_coll_pt, normal_at_x_coll_pt, src_interval_idx):
-                        y_source_pt = self.param_to_physical(t_param_source, src_interval_idx)
-                        return np.real(-k**2 * self.G(x_coll_pt, y_source_pt)) * line_length_j
 
-                    def kernel_imag_param(t_param_source, x_coll_pt, normal_at_x_coll_pt, src_interval_idx):
+                    def kernel_real_param(t_param_source, x_coll_pt, normal_at_x_coll_pt, normal_at_y_pt, src_interval_idx):
                         y_source_pt = self.param_to_physical(t_param_source, src_interval_idx)
-                        return np.imag(-k**2 * self.G(x_coll_pt, y_source_pt)) * line_length_j
+                        jacobian = self.line_lengths[src_interval_idx]  # Ensure correct scaling
+                        return np.real(-k**2 * self.G(x_coll_pt, y_source_pt) + 1j * self.DG(x_coll_pt, y_source_pt, normal_at_x_coll_pt) - self.D2G(x_coll_pt, y_source_pt, normal_at_x_coll_pt, normal_at_y_pt)) * jacobian
+
+                    def kernel_imag_param(t_param_source, x_coll_pt, normal_at_x_coll_pt, normal_at_y_pt, src_interval_idx):
+                        y_source_pt = self.param_to_physical(t_param_source, src_interval_idx)
+                        jacobian = self.line_lengths[src_interval_idx]  # Ensure correct scaling
+                        return np.imag(-k**2 * self.G(x_coll_pt, y_source_pt) + 1j * self.DG(x_coll_pt, y_source_pt, normal_at_x_coll_pt) - self.D2G(x_coll_pt, y_source_pt, normal_at_x_coll_pt, normal_at_y_pt)) * jacobian
 
                     # Numerical integration over the j-th source element on Gamma_aux
                     real_part, _ = quad(kernel_real_param, t_a_j, t_b_j,
-                                        args=(x_mid_point, normal_at_x_mid, interval_idx_j))
+                                        args=(x_mid_point, normal_at_x_mid, normal_at_y_mid, interval_idx_j))
                     imag_part, _ = quad(kernel_imag_param, t_a_j, t_b_j,
-                                        args=(x_mid_point, normal_at_x_mid, interval_idx_j))
+                                        args=(x_mid_point, normal_at_x_mid, normal_at_y_mid, interval_idx_j))
 
                     self.A[i, j] = real_part + 1j * imag_part
 
@@ -346,7 +351,7 @@ class IndirectBEM:
     #                 # def kernel_imag_param(t_param_source, x_coll_pt, src_interval_idx):
     #                 #     y_source_pt = self.param_to_physical(t_param_source, src_interval_idx)
     #                 #     return np.imag(-k**2 * self.G(x_coll_pt, y_source_pt)) * line_length_j
-                    
+
     #                 def kernel_real(x_source):
     #                     return np.real(-k**2 * self.G(x_mid_i, np.array([x_source, x_mid_i[1]])))
 
@@ -539,5 +544,5 @@ if __name__ == '__main__':
     #              ([1, -1], [2, -1])]
     # run_bem_test(intervals, np.pi/4, 10.0, 200)
 
-    intervals = [([-1, 1], [1, -1])]
-    run_bem_test(intervals, np.pi/3, 10.0, 200)
+    intervals = [([-1, 0], [-0.05, 0]), ([0.05, 0], [1, 0])]
+    run_bem_test(intervals, np.pi/2, 10.0, 400)
