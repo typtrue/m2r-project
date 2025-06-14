@@ -3,31 +3,52 @@ from scipy.special import hankel1
 from math import e, cos, sin
 from scipy.integrate import quad
 import matplotlib.pyplot as plt
-import mayavi.mlab as ml
-
 
 class IndirectBEM:
-    def __init__(self, intervals, alpha, k=10, n=100):
+    """
+    Implements the Indirect Boundary Element Method for the 2D Helmholtz equation.
+
+    This class can solve the acoustic scattering problem using two methods for
+    handling the singular integrals:
+    1.  Standard Method (Default): Analytically calculates the integral for singular
+        diagonal elements and uses numerical quadrature for others.
+    2.  Auxiliary Method: Shifts the integration boundary slightly to avoid
+        singularities altogether, allowing numerical quadrature for all elements.
+    """
+    def __init__(self, intervals, alpha, k=10, n=100, use_auxiliary=False):
+        """
+        Initializes the BEM solver.
+
+        Args:
+            intervals (list of tuples): A list of start and end points for each line segment of the boundary.
+            alpha (float): The angle of incidence of the plane wave in radians.
+            k (float, optional): The wave number. Defaults to 10.
+            n (int, optional): The total number of discretization points. Defaults to 100.
+            use_auxiliary (bool, optional): If True, uses the auxiliary boundary method to handle singularities.
+                                            If False (default), uses analytical integration for singular elements.
+        """
         self.k = k
         self.alpha = alpha
+        self.use_auxiliary = use_auxiliary
         self.intervals = [(np.array(start), np.array(end)) for start, end in intervals]
 
-        print(self.intervals)
-
+        # --- Geometric properties of the boundary ---
         self.line_vectors = [end - start for start, end in self.intervals]
         self.line_lengths = [np.linalg.norm(vec) for vec in self.line_vectors]
         self.tangents = [vec / length if length > 0 else np.array([1, 0]) for vec, length in zip(self.line_vectors, self.line_lengths)]
         self.normals = [np.array([-tangent[1], tangent[0]]) for tangent in self.tangents]
 
+        # --- Discretization setup ---
         total_length = sum(self.line_lengths)
         self.Ns = [int(round(n * length / total_length)) if total_length > 0 else int(n / len(self.intervals)) for length in self.line_lengths]
         self.N = sum(self.Ns)
+        
+        # --- Auxiliary boundary setup ---
+        # The offset distance delta is calculated, but only used if use_auxiliary is True.
         self.offset_distances = [0.1 * length / N_i if N_i > 0 else 0 for length, N_i in zip(self.line_lengths, self.Ns)]
 
+        # --- BEM Calculation Workflow ---
         self.interval_creator()
-
-        print(self.all_param_intervals)
-
         self.calc_physical_mids()
         self.A = np.zeros((self.N, self.N), dtype=complex)
         self.g_prime = np.zeros(self.N, dtype=complex)
@@ -36,110 +57,51 @@ class IndirectBEM:
         self.calc_g_prime()
         self.calc_phi()
 
-        print(np.isclose(self.A, self.A.T))
-
-        print(self.A)
-
-        print(self.A[0, -1])
-
-        # print(self.g_prime)
-        print(self.phi)
-
-
-    # ------ TEMP ------ #
+    # ------ Green's functions and their derivatives ------ #
 
     def G(self, x, y):
-        """Green function for 2D Helmholtz."""
+        """Green's function for 2D Helmholtz."""
         diff = np.array(x) - np.array(y)
         R = np.linalg.norm(diff)
-
+        if np.isclose(R, 0):
+            return np.inf + 0j # Should be handled by analytical integration or auxiliary method
         return 1j/4 * hankel1(0, self.k * R)
 
     def DG(self, x, y, normal_vec):
-        """Partial derivative of Green function wrt. y in second variable."""
+        """Normal derivative of the Green's function with respect to the source normal."""
         diff = x - y
         R = np.linalg.norm(diff)
-
+        if np.isclose(R, 0):
+            return np.inf + 0j
         direction = diff / R
         normal_deriv = np.dot(direction, normal_vec)
-
         return normal_deriv * (1j * self.k / 4.0) * hankel1(1, self.k * R)
 
     def D2G(self, x, y, normal_vec_x, normal_vec_y):
-        """Second partial derivative of Green function, once wrt y in first variable, once wrt y in second."""
+        """Second partial derivative of the Green's function."""
         diff = x - y
         R = np.linalg.norm(diff)
-
+        if np.isclose(R, 0):
+            return np.inf + 0j
         s = hankel1(0, self.k * R) - hankel1(2, self.k * R)
-
         return (1.0j * self.k ** 2 * np.dot(diff, normal_vec_x) * np.dot(diff, normal_vec_y) * s) / (8 * R ** 2)
 
-    # ------------------------------------------ #
+    # ------ Coordinate transformations ------ #
 
     def param_to_physical(self, t, interval_idx):
-        """Convert parameter t ∈ [0, 1] to physical coordinates on the line segment."""
+        """Convert parameter t in [0, 1] to physical coordinates on the actual boundary."""
         return self.intervals[interval_idx][0] + t * self.line_vectors[interval_idx]
 
     def param_to_aux_physical(self, t, interval_idx):
-        """Convert parameter t ∈ [0, 1] to physical coordinates on the auxiliary line."""
-        return self.param_to_physical(t, interval_idx) - self.offset_distances[interval_idx] * self.normals[interval_idx]
+        """Convert parameter t in [0, 1] to physical coordinates on the auxiliary boundary."""
+        physical_point = self.param_to_physical(t, interval_idx)
+        offset = self.offset_distances[interval_idx] * self.normals[interval_idx]
+        return physical_point - offset
 
-    def physical_to_param(self, point):
-        """Convert physical point to parameter t along the line segment."""
-        if self.line_length == 0:
-            return 0
-        return np.dot(point - self.start_point, self.line_vector) / (self.line_length**2)
+    # ------ Discretization and Midpoint Calculation ------ #
 
-    # def interval_creator(self):
-    #     """Create parameter intervals in [0, 1] for each line segment."""
-    #     self.all_param_intervals = []
-    #     for i in range(len(self.intervals)):
-    #         if self.Ns[i] == 0:
-    #             self.all_param_intervals.append([])
-    #             continue
-
-    #         n = self.Ns[i]
-    #         self.all_param_intervals.extend([np.linspace(0, 1, n+1)])
-
-    #         continue
-
-    #         target_n = self.Ns[i]
-    #         n_boundary = int(round(5 * self.k))
-    #         if target_n >= 2 * n_boundary:
-    #             n_boundary_region1 = n_boundary
-    #             n_boundary_region3 = n_boundary
-    #             n_middle_region = target_n - n_boundary_region1 - n_boundary_region3
-    #         else:
-    #             n_boundary_region1 = target_n // 2
-    #             n_boundary_region3 = target_n - n_boundary_region1
-    #             n_middle_region = 0
-
-    #         pt_A, pt_D = 0.0, 1.0
-    #         param_scale = 1.0 / (self.k * self.line_lengths[i]) if self.line_lengths[i] > 0 else 0.1
-    #         ideal_transition_B = pt_A + param_scale
-    #         ideal_transition_C = pt_D - param_scale
-    #         actual_B_endpoint = min(ideal_transition_B, pt_D)
-    #         actual_B_endpoint = max(actual_B_endpoint, pt_A)
-    #         actual_C_startpoint = max(ideal_transition_C, pt_A)
-    #         actual_C_startpoint = min(actual_C_startpoint, pt_D)
-    #         actual_C_startpoint = max(actual_C_startpoint, actual_B_endpoint)
-    #         nodes_to_concatenate = []
-    #         if n_boundary_region1 > 0:
-    #             nodes_to_concatenate.append(np.linspace(pt_A, actual_B_endpoint, n_boundary_region1 + 1))
-    #         if actual_C_startpoint > actual_B_endpoint and n_middle_region > 0:
-    #             nodes_to_concatenate.append(np.linspace(actual_B_endpoint, actual_C_startpoint, n_middle_region + 1))
-    #         if n_boundary_region3 > 0:
-    #             # To handle the case where the middle region is skipped, ensure concatenation starts from the correct point.
-    #             start_point_reg3 = actual_C_startpoint if (actual_C_startpoint > actual_B_endpoint and n_middle_region > 0) else actual_B_endpoint
-    #             nodes_to_concatenate.append(np.linspace(start_point_reg3, pt_D, n_boundary_region3 + 1))
-
-    #         if nodes_to_concatenate:
-    #             self.all_param_intervals.append(np.unique(np.concatenate(nodes_to_concatenate)))
-    #         else:
-    #             self.all_param_intervals.append(np.array([pt_A, pt_D]))
-    
     def interval_creator(self):
-        """Create parameter intervals in [0, 1] for each line segment."""
+        """Create graded parameter intervals to have more points near corners."""
         self.all_param_intervals = []
         for i in range(len(self.intervals)):
             if self.Ns[i] == 0:
@@ -147,6 +109,7 @@ class IndirectBEM:
                 continue
 
             target_n = self.Ns[i]
+            # Refine mesh near endpoints based on wave number k
             n_boundary = int(round(5 * self.k))
             if target_n >= 2 * n_boundary:
                 n_boundary_region1 = n_boundary
@@ -157,33 +120,35 @@ class IndirectBEM:
                 n_boundary_region3 = target_n - n_boundary_region1
                 n_middle_region = 0
 
+            # Define transition points for the graded mesh
             pt_A, pt_D = 0.0, 1.0
             param_scale = 1.0 / (self.k * self.line_lengths[i]) if self.line_lengths[i] > 0 else 0.1
             ideal_transition_B = pt_A + param_scale
             ideal_transition_C = pt_D - param_scale
+            
+            # Ensure transition points are within the [0, 1] interval
             actual_B_endpoint = min(ideal_transition_B, pt_D)
             actual_B_endpoint = max(actual_B_endpoint, pt_A)
             actual_C_startpoint = max(ideal_transition_C, pt_A)
             actual_C_startpoint = min(actual_C_startpoint, pt_D)
             actual_C_startpoint = max(actual_C_startpoint, actual_B_endpoint)
+            
             nodes_to_concatenate = []
             if n_boundary_region1 > 0:
                 nodes_to_concatenate.append(np.linspace(pt_A, actual_B_endpoint, n_boundary_region1 + 1))
             if actual_C_startpoint > actual_B_endpoint and n_middle_region > 0:
                 nodes_to_concatenate.append(np.linspace(actual_B_endpoint, actual_C_startpoint, n_middle_region + 1))
             if n_boundary_region3 > 0:
-                # To handle the case where the middle region is skipped, ensure concatenation starts from the correct point.
                 start_point_reg3 = actual_C_startpoint if (actual_C_startpoint > actual_B_endpoint and n_middle_region > 0) else actual_B_endpoint
                 nodes_to_concatenate.append(np.linspace(start_point_reg3, pt_D, n_boundary_region3 + 1))
-
+            
             if nodes_to_concatenate:
                 self.all_param_intervals.append(np.unique(np.concatenate(nodes_to_concatenate)))
             else:
-                self.all_param_intervals.append(np.array([pt_A, pt_D]))
+                 self.all_param_intervals.append(np.array([pt_A, pt_D]))
 
-    # Calculate midpoints across all intervals and store their properties.
     def calc_physical_mids(self):
-        """Calculate physical midpoints of each element across all intervals."""
+        """Calculate physical midpoints (collocation points) of each element."""
         self.mids = []
         self.mid_interval_indices = []
         self.element_param_bounds = []
@@ -198,228 +163,117 @@ class IndirectBEM:
                 self.element_param_bounds.append((t_a, t_b))
         self.mids = np.array(self.mids)
 
-    def kernel(self, x, y, normal_vec):
-        """Kernel function for points in 2D space."""
-        diff = x - y
-        R = np.linalg.norm(diff)
-
-        if np.isclose(R, 0):
-            return 0 + 0j
-
-        direction = diff / R
-        normal_deriv = np.dot(direction, normal_vec)
-
-        return - normal_deriv * (1j * self.k / 4.0) * hankel1(1, self.k * R)
+    # ------ BEM Core Calculations ------ #
 
     def incident_field(self, x1, x2, alpha):
-        return e ** (1j * self.k * (x1 * cos(alpha) + x2 * sin(alpha)))
+        """Calculate the incident plane wave."""
+        return e**(1j * self.k * (x1 * cos(alpha) + x2 * sin(alpha)))
 
     def calc_g_prime(self):
         """Calculate the boundary condition g' = -∂u_inc/∂n."""
         u_inc = np.array([self.incident_field(mid[0], mid[1], self.alpha) for mid in self.mids])
-
         duinc_dx1 = 1j * self.k * cos(self.alpha) * u_inc
         duinc_dx2 = 1j * self.k * sin(self.alpha) * u_inc
-
-        # Normal derivative using per-element normals.
         normals_array = np.array([self.normals[i] for i in self.mid_interval_indices])
         self.g_prime = -(normals_array[:, 0] * duinc_dx1 + normals_array[:, 1] * duinc_dx2)
 
-    def f_y_param(self, t, x, normal_vec):
-        """Integrand function in parameter space."""
-        y = self.param_to_physical(t)
-        diff = x - y
-        R = np.linalg.norm(diff)
-
-        if np.isclose(R, 0.0):
-            # Handle singularity
-            val = -np.dot(normal_vec, normal_vec) * (1j * self.k / 4.0) * (-2j / np.pi)
-            return (val.real + val.imag * 1j) * self.line_length
-
-        direction = diff / R
-        normal_deriv = np.dot(direction, normal_vec)
-        integrand_val = -normal_deriv * (1j * self.k / 4.0) * R * hankel1(1, self.k * R)
-
-        # Multiply by Jacobian (line_length) for parameter transformation
-        return integrand_val * self.line_length
-
-    # def calc_A(self):
-    #     """Calculate the matrix A."""
-    #     k = self.k
-    #     for i in range(self.N):
-    #         x_mid_point = self.mids[i]
-    #         normal_at_x_mid = self.normals[self.mid_interval_indices[i]]
-
-    #         for j in range(self.N):
-    #             t_a_j, t_b_j = self.element_param_bounds[j]
-    #             interval_idx_j = self.mid_interval_indices[j]
-    #             line_length_j = self.line_lengths[interval_idx_j]
-
-    #             def kernel_real_param_aux(t_param_source, x_coll_pt, normal_at_x_coll_pt, src_interval_idx):
-    #                 y_source_pt_aux = self.param_to_aux_physical(t_param_source, src_interval_idx)
-    #                 return np.real(k**2 * self.G(x_coll_pt, y_source_pt_aux) - 1j * self.DG(x_coll_pt, y_source_pt_aux, normal_at_x_coll_pt)) * line_length_j
-
-    #             def kernel_imag_param_aux(t_param_source, x_coll_pt, normal_at_x_coll_pt, src_interval_idx):
-    #                 y_source_pt_aux = self.param_to_aux_physical(t_param_source, src_interval_idx)
-    #                 return np.imag(k**2 * self.G(x_coll_pt, y_source_pt_aux) - 1j * self.DG(x_coll_pt, y_source_pt_aux, normal_at_x_coll_pt)) * line_length_j
-
-    #             # Numerical integration over the j-th source element on Gamma_aux
-    #             real_part, _ = quad(kernel_real_param_aux, t_a_j, t_b_j,
-    #                                 args=(x_mid_point, normal_at_x_mid, interval_idx_j))
-    #             imag_part, _ = quad(kernel_imag_param_aux, t_a_j, t_b_j,
-    #                                 args=(x_mid_point, normal_at_x_mid, interval_idx_j))
-
-    #             self.A[i, j] = real_part + 1j * imag_part
-
     def calc_A(self):
-        """Calculate the matrix A."""
+        """
+        Calculate the influence matrix A.
+        This method uses the `self.use_auxiliary` flag to decide how to handle
+        the singular integrals on the diagonal elements of the matrix.
+        """
         k = self.k
+        # Determine the source point mapping based on the chosen method.
+        # The source point (y) is on the auxiliary boundary if use_auxiliary is True.
+        param_to_source_physical = self.param_to_aux_physical if self.use_auxiliary else self.param_to_physical
+
         for i in range(self.N):
+            # The collocation point (x) is always on the original boundary.
             x_mid_point = self.mids[i]
             normal_at_x_mid = self.normals[self.mid_interval_indices[i]]
 
             for j in range(self.N):
                 t_a_j, t_b_j = self.element_param_bounds[j]
                 interval_idx_j = self.mid_interval_indices[j]
-                normal_at_y_mid = self.normals[self.mid_interval_indices[j]]
-                bound = self.element_param_bounds[i]
-                line_length_j = self.line_lengths[interval_idx_j]
-                L = self.line_lengths[self.mid_interval_indices[i]]
-                L_i = L * abs(bound[0] - bound[1])
+                normal_at_y_mid = self.normals[interval_idx_j]
 
-                diag = -L * L_i * 1.0j * self.k ** 2 * (np.pi + 2.0j * (np.log(L / 2) + np.log(self.k * L_i / 4) + np.euler_gamma - 1)) / (8 * np.pi)
-
-
-                if i==j:
-                    self.A[i,i] = diag
-
+                # --- TOGGLEABLE LOGIC ---
+                # If not using the auxiliary method, we must handle the singularity
+                # on the diagonal elements (i==j) analytically.
+                if not self.use_auxiliary and i == j:
+                    bound = self.element_param_bounds[i]
+                    L = self.line_lengths[self.mid_interval_indices[i]]
+                    L_i = L * abs(bound[0] - bound[1])
+                    # Analytical solution for the singular integral
+                    diag_val = -L * L_i * 1.0j * self.k ** 2 * (np.pi + 2.0j * (np.log(L / 2) + np.log(self.k * L_i / 4) + np.euler_gamma - 1)) / (8 * np.pi)
+                    self.A[i, j] = diag_val
                 else:
+                    # If using the auxiliary method, or for off-diagonal elements,
+                    # we can use standard numerical quadrature.
+                    def kernel_real_param(t, x_coll, n_x, n_y, src_idx):
+                        y_source = param_to_source_physical(t, src_idx)
+                        jacobian = self.line_lengths[src_idx]
+                        integrand = -k**2 * self.G(x_coll, y_source) + 1j * self.DG(x_coll, y_source, n_x) - self.D2G(x_coll, y_source, n_x, n_y)
+                        return np.real(integrand) * jacobian
 
+                    def kernel_imag_param(t, x_coll, n_x, n_y, src_idx):
+                        y_source = param_to_source_physical(t, src_idx)
+                        jacobian = self.line_lengths[src_idx]
+                        integrand = -k**2 * self.G(x_coll, y_source) + 1j * self.DG(x_coll, y_source, n_x) - self.D2G(x_coll, y_source, n_x, n_y)
+                        return np.imag(integrand) * jacobian
 
-                    def kernel_real_param(t_param_source, x_coll_pt, normal_at_x_coll_pt, normal_at_y_pt, src_interval_idx):
-                        y_source_pt = self.param_to_physical(t_param_source, src_interval_idx)
-                        jacobian = self.line_lengths[src_interval_idx]  # Ensure correct scaling
-                        return np.real(-k**2 * self.G(x_coll_pt, y_source_pt) + 1j * self.DG(x_coll_pt, y_source_pt, normal_at_x_coll_pt) - self.D2G(x_coll_pt, y_source_pt, normal_at_x_coll_pt, normal_at_y_pt)) * jacobian
-
-                    def kernel_imag_param(t_param_source, x_coll_pt, normal_at_x_coll_pt, normal_at_y_pt, src_interval_idx):
-                        y_source_pt = self.param_to_physical(t_param_source, src_interval_idx)
-                        jacobian = self.line_lengths[src_interval_idx]  # Ensure correct scaling
-                        return np.imag(-k**2 * self.G(x_coll_pt, y_source_pt) + 1j * self.DG(x_coll_pt, y_source_pt, normal_at_x_coll_pt) - self.D2G(x_coll_pt, y_source_pt, normal_at_x_coll_pt, normal_at_y_pt)) * jacobian
-
-                    # Numerical integration over the j-th source element on Gamma_aux
-                    real_part, _ = quad(kernel_real_param, t_a_j, t_b_j,
-                                        args=(x_mid_point, normal_at_x_mid, normal_at_y_mid, interval_idx_j))
-                    imag_part, _ = quad(kernel_imag_param, t_a_j, t_b_j,
-                                        args=(x_mid_point, normal_at_x_mid, normal_at_y_mid, interval_idx_j))
-
+                    real_part, _ = quad(kernel_real_param, t_a_j, t_b_j, args=(x_mid_point, normal_at_x_mid, normal_at_y_mid, interval_idx_j))
+                    imag_part, _ = quad(kernel_imag_param, t_a_j, t_b_j, args=(x_mid_point, normal_at_x_mid, normal_at_y_mid, interval_idx_j))
                     self.A[i, j] = real_part + 1j * imag_part
 
-    # def calc_A(self):
-    #     """Calculate the matrix A."""
-    #     k = self.k
-    #     for i in range(self.N):
-    #         x_mid_i = self.mids[i]
-    #         normal_at_x_mid = self.normals[self.mid_interval_indices[i]]
-    #         bound = self.element_param_bounds[i]
-    #         L = self.line_lengths[self.mid_interval_indices[i]]
-    #         L_i = L * abs(bound[0] - bound[1])
-
-    #         diag = -L * L_i * 1.0j * self.k ** 2 * (np.pi + 2.0j * (np.log(L / 2) + np.log(self.k * L_i / 4) + np.euler_gamma - 1)) / (8 * np.pi)
-
-    #         # diag = L * L_i * k**2 * (2 * np.log((k * L * L_i) / 4) - 1.0j * np.pi + 2*np.euler_gamma - 2) / (4 * np.pi)
-    #         # print(diag)
-
-    #         for j in range(self.N):
-    #             t_a_j, t_b_j = self.element_param_bounds[j]
-    #             segment_length = t_b_j - t_a_j
-    #             interval_idx_j = self.mid_interval_indices[j]
-    #             line_length_j = self.line_lengths[interval_idx_j]
-
-    #             x_mid_j = self.mids[j]
-    #             x_a_j, x_b_j = x_mid_i[0] + np.linalg.norm(x_mid_j - x_mid_i) - segment_length * line_length_j / 2, x_mid_i[0] + np.linalg.norm(x_mid_j - x_mid_i) + segment_length * line_length_j / 2
-
-    #             if i == j:
-    #                 self.A[i, i] = diag
-    #                 # print(diag)
-    #                 # print(1.0j / 2 - diag)
-
-    #             else: # PROBLEM LIES IN THESE INTERGRAL CALCULATIONS: TODO: 12/06/25 - FIX THESE INTEGRALS
-    #                 # def kernel_real_param(t_param_source, x_coll_pt, src_interval_idx):
-    #                 #     y_source_pt = self.param_to_physical(t_param_source, src_interval_idx)
-    #                 #     return np.real(-k**2 * self.G(x_coll_pt, y_source_pt)) * line_length_j
-
-    #                 # def kernel_imag_param(t_param_source, x_coll_pt, src_interval_idx):
-    #                 #     y_source_pt = self.param_to_physical(t_param_source, src_interval_idx)
-    #                 #     return np.imag(-k**2 * self.G(x_coll_pt, y_source_pt)) * line_length_j
-
-    #                 def kernel_real(x_source):
-    #                     return np.real(-k**2 * self.G(x_mid_i, np.array([x_source, x_mid_i[1]])))
-
-    #                 def kernel_imag(x_source):
-    #                     return np.imag(-k**2 * self.G(x_mid_i, np.array([x_source, x_mid_i[1]])))
-
-
-    #                 # Numerical integration over the j-th source element on Gamma_aux
-    #                 real_part, _ = quad(kernel_real, x_a_j, x_b_j, limit=np.floor(4*self.N))
-    #                 imag_part, _ = quad(kernel_imag, x_a_j, x_b_j, limit=np.floor(4*self.N))
-
-    #                 # if i == self.N - j - 1:
-
-    #                 #     print(f"x_i: {x_mid_i}")
-    #                 #     print(f"x_j: {x_mid_j}")
-
-    #                 #     print(real_part)
-    #                 #     print(imag_part)
-
-    #                 self.A[i, j] = real_part + 1j * imag_part
-
-
     def calc_phi(self):
+        """Solve the linear system to find the density function phi."""
         try:
-            self.phi = np.linalg.solve(1.0j * np.identity(self.N) / 2 - self.A, self.g_prime)
+            # For Neumann problem, the BIE is (i/2)phi - A*phi = g'
+            # (Note: This is based on eq 3.22, 3.24 from the document)
+            B = (1.0j * np.identity(self.N) / 2.0) - self.A
+            self.phi = np.linalg.solve(B, self.g_prime)
         except np.linalg.LinAlgError as e:
             print(f"Error solving linear system: {e}")
-            return None
+            self.phi = None
 
-    def green_function(self, x, y):
-        """Green's function between two 2D points."""
-        diff = np.array(x) - np.array(y)
-        R = np.linalg.norm(diff)
+    def calc_u_scat(self, x_points):
+        """
+        Calculate the scattered field at a set of evaluation points.
+        This method also uses the `self.use_auxiliary` flag to determine the
+        integration path for calculating the scattered field.
+        """
+        u_scattered = np.zeros(len(x_points), dtype=complex)
+        
+        # Determine the integration path (source points y)
+        param_to_source_physical = self.param_to_aux_physical if self.use_auxiliary else self.param_to_physical
 
-        if np.isclose(R, 0.0):
-            return np.inf + 0.0j
-        return 1j/4 * hankel1(0, self.k * R)
-
-    def calc_u_scat(self, x):
-        """Calculate scattered field at evaluation points x."""
-        u_scattered = np.zeros(len(x), dtype=complex)
-
-        for idx_x, x_eval in enumerate(x):
-            if idx_x % 10 == 0:
-                print(f"{idx_x} completed.")
+        for idx_x, x_eval in enumerate(x_points):
+            if idx_x > 0 and idx_x % 100 == 0:
+                print(f"Calculating scattered field: {idx_x}/{len(x_points)} points completed.")
+            
             val_at_x = 0.0 + 0.0j
-
             for j in range(self.N):
                 phi_j = self.phi[j]
                 t_a, t_b = self.element_param_bounds[j]
                 interval_idx_j = self.mid_interval_indices[j]
                 line_length_j = self.line_lengths[interval_idx_j]
-                normal_at_y_mid = self.normals[self.mid_interval_indices[j]]
+                normal_at_y = self.normals[interval_idx_j]
 
                 def green_real_param(t, x_pt, src_interval_idx):
-                    y_pt = self.param_to_aux_physical(t, src_interval_idx)
-                    return np.real((self.DG(x_pt, y_pt, normal_at_y_mid) - 1j * self.G(x_pt, y_pt)) * phi_j) * line_length_j
+                    y_pt = param_to_source_physical(t, src_interval_idx)
+                    integrand = (self.DG(x_pt, y_pt, normal_at_y) - 1j * self.k * self.G(x_pt, y_pt)) * phi_j
+                    return np.real(integrand) * line_length_j
 
                 def green_imag_param(t, x_pt, src_interval_idx):
-                    y_pt = self.param_to_aux_physical(t, src_interval_idx)
-                    return np.imag((self.DG(x_pt, y_pt, normal_at_y_mid) - 1j * self.G(x_pt, y_pt)) * phi_j) * line_length_j
+                    y_pt = param_to_source_physical(t, src_interval_idx)
+                    integrand = (self.DG(x_pt, y_pt, normal_at_y) - 1j * self.k * self.G(x_pt, y_pt)) * phi_j
+                    return np.imag(integrand) * line_length_j
 
                 real_part, _ = quad(green_real_param, t_a, t_b, args=(x_eval, interval_idx_j))
                 imag_part, _ = quad(green_imag_param, t_a, t_b, args=(x_eval, interval_idx_j))
-
-                integral_G_dy = real_part + 1j * imag_part
-
-                val_at_x += integral_G_dy
+                val_at_x += (real_part + 1j * imag_part)
 
             u_scattered[idx_x] = val_at_x
 
@@ -479,6 +333,7 @@ def plot_wave_effects(x_grid, y_grid, u_tot, bem, alpha_rad, k):
 
     plt.tight_layout(rect=[0, 0, 1, 0.95])
     plt.show()
+
 
 def amplitude_sample(bem, n=1000, r=10**7):
     x_vals = np.linspace(0, 2*np.pi, n, endpoint=False)

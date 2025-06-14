@@ -1,3 +1,5 @@
+"""Implements calculations related to Greens Function."""
+
 from scipy.special import hankel1
 import numpy as np
 

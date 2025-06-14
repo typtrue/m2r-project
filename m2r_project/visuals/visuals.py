@@ -1,4 +1,4 @@
-"""This script contains code to generate plots and visuals."""
+"""Generate plots and visuals."""
 
 import numpy as np
 import matplotlib.pyplot as plt
