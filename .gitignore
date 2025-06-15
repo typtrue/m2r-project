@@ -1,5 +1,2 @@
 .venv/
-m2r_project/__pycache__/
-m2r_project/BEM/__pycache__/
-m2r_project/helper/__pycache__/
-m2r_project/visuals/__pycache__/
+/**/__pycache__/
