@@ -42,8 +42,8 @@ def main():
         "single_plate_horizontal": {
             "intervals": [([-1, 0], [1, 0])],
             "alpha_rad": np.pi / 2,
-            "k": 5.0,
-            "n": 50
+            "k": 10.0,
+            "n": 110
         },
         "single_plate_angled": {
             "intervals": [([-1, -0.5], [1, 0.5])],
@@ -66,9 +66,21 @@ def main():
         }
     }
 
+    key_int = int(input("Select geometry: \n\
+1. Complex obstacle \n\
+2. Corner reflector \n\
+3. Double-slit \n\
+4. Single angled plate \n\
+5. Single horizontal plate \n\
+6. Narrow single-slit \n\
+7. Wide single-slit \n\
+8. V-shape scatterer\n")) - 1
+
+    selected_geometry_key = sorted(geometry_presets.keys())[key_int]
+
     # --- CHOOSE YOUR VISUALIZATION HERE ---
     # Change the key to select a different geometry preset
-    selected_geometry_key = "single_slit_narrow"
+    # selected_geometry_key = "single_slit_narrow"
     # selected_geometry_key = "double_slit"
     # selected_geometry_key = "corner_reflector"
     # selected_geometry_key = "single_plate_horizontal"
@@ -161,7 +173,7 @@ def amplitude_sample(bem, n=1000, r=10**7):
                         np.exp(1.0j * bem.k * r))
 
         if i % 100 == 0:
-            print(f"{i}/{n}")
+            print(f"Calculating amplitude sample: {i}/{n} points completed.")
 
     fig, ax = plt.subplots()
     ax.plot(x_vals, y_vals, linewidth=2)
@@ -206,7 +218,7 @@ def run_bem_test(intervals, alpha_rad, k, n):
 
     u_tot = (u_scat_grid + u_inc_grid).reshape(x_grid.shape)
 
-    # plot_mayavi_surface(x_grid, y_grid, u_tot, bem)
+    plot_mayavi_surface(x_grid, y_grid, u_tot, bem)
     plot_wave_effects(x_grid, y_grid, u_tot, bem, alpha_rad, k)
     # amplitude_sample(bem)
 
