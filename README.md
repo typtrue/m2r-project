@@ -14,6 +14,10 @@ This is the repository containing code used for our 2nd year research project.
 This repo contains code used to generate figures for the report / presentation, as well as
 code that computes numerical solutions to the problem posed in our project.
 All code contained in this repo was written by Dan Haywood and Michael Williams.
+To generate visualisations you can use the following scripts:
+run-bem-visuals: Generate visuals based on the indirect BEM algorithm.
+run-general-visuals: Generate useful visuals for the project.
+
 
 We make use of the `mayavi` and `matplotlib` packages to plot results and figures,
 and the `numpy` and `scipy` packages for general calculation purposes.

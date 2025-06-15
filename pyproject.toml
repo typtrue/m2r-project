@@ -3,8 +3,23 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "m2r"
-version = "0.1"
+name = "m2r_project"
+version = "0.1.0"
+authors = [
+  { name="Dan Haywood", CID="02404325" },
+  { name="Kane Rowley", CID="02220050" },
+  { name="Michael Williams", CID="02385632" }
+]
+description = "A package to calculate diffraction on plates using the boundary element method."
+readme = "README.md"
 
-[tool.hatch.build.targets.wheel]
-packages = ["m2r"]
+dependencies = [
+    "numpy",
+    "matplotlib",
+    "mayavi",
+    "scipy",
+]
+
+[project.scripts]
+run-bem-visuals = "m2r_project.visuals.BEM_visuals:main"
+run-general-visuals = "m2r_project.visuals.general_visuals:main"
