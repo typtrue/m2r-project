@@ -69,14 +69,14 @@ def main():
 
     while True:
         inp = input("Select geometry: \n\
-1. Complex obstacle \n\
-2. Corner reflector \n\
-3. Double-slit \n\
-4. Single angled plate \n\
-5. Single horizontal plate \n\
-6. Narrow single-slit \n\
-7. Wide single-slit \n\
-8. V-shape scatterer\n")
+                     1. Complex obstacle \n\
+                     2. Corner reflector \n\
+                     3. Double-slit \n\
+                     4. Single angled plate \n\
+                     5. Single horizontal plate \n\
+                     6. Narrow single-slit \n\
+                     7. Wide single-slit \n\
+                     8. V-shape scatterer\n")
         if inp.isdigit() and (int(inp) >= 1 and int(inp) <= 8):
             key_int = int(inp) - 1
             break
