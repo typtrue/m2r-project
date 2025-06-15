@@ -58,15 +58,6 @@ class IndirectBEM:
         print("Generating field densities.")
         self.calc_phi()
 
-        print(np.isclose(self.A, self.A.T))
-
-        print(self.A)
-
-        print(self.A[0, -1])
-
-        # print(self.g_prime)
-        print(self.phi)
-
     # ------ Coordinate transformations ------ #
 
     def param_to_physical(self, t, interval_idx):
@@ -221,7 +212,6 @@ class IndirectBEM:
                                  np.log(self.k * L_i / 4) +
                                  np.euler_gamma - 1)) / (8 * np.pi))
                     self.A[i, j] = diag_val
-                    print(self.A[i, j])
                 else:
                     real_part, _ = quad(self.kernel_real_param, t_a_j, t_b_j,
                                         args=(x_mid_point, normal_at_x_mid,
@@ -287,12 +277,12 @@ class IndirectBEM:
                 real_part, _ = quad(
                     self.green_real_param, t_a, t_b,
                     args=(x_eval, interval_idx_j, normal_at_y, phi_j,
-                          line_length_j * scale)
+                          line_length_j * scale), limit=200
                 )
                 imag_part, _ = quad(
                     self.green_imag_param, t_a, t_b,
                     args=(x_eval, interval_idx_j, normal_at_y, phi_j,
-                          line_length_j * scale)
+                          line_length_j * scale), limit=200
                 )
                 val_at_x += (real_part + 1j * imag_part)
 

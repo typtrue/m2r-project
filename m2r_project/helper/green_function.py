@@ -26,8 +26,6 @@ class GreensFunctionCalculator:
         """Partial derivative of the Green's function w.r.t. unit vector."""
         diff = x - y
         R = np.linalg.norm(diff)
-        if np.isclose(R, 0):
-            return np.inf + 0j
         direction = diff / R
         unit_deriv = np.dot(direction, unit_vec)
         return unit_deriv * (1j * self.k / 4.0) * hankel1(1, self.k * R)
@@ -36,8 +34,6 @@ class GreensFunctionCalculator:
         """Partial derivative of the Green's function w.r.t x and y."""
         diff = x - y
         R = np.linalg.norm(diff)
-        if np.isclose(R, 0):
-            return np.inf + 0j
         s = hankel1(0, self.k * R) - hankel1(2, self.k * R)
         return (1.0j * self.k ** 2 * np.dot(diff, unit_vec_x) *
                 np.dot(diff, unit_vec_y) * s) / (8 * R ** 2)

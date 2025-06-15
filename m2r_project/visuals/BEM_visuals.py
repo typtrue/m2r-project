@@ -15,13 +15,13 @@ def main():
             "intervals": [([-1, 0], [-0.3, 0]), ([0.3, 0], [1, 0])],
             "alpha_rad": np.pi / 2,
             "k": 10.0,
-            "n": 50
+            "n": 250
         },
         "single_slit_wide": {
             "intervals": [([-1, 0], [-0.6, 0]), ([0.6, 0], [1, 0])],
             "alpha_rad": np.pi / 2,
             "k": 10.0,
-            "n": 50
+            "n": 250
         },
         "double_slit": {
             "intervals": [
@@ -30,43 +30,45 @@ def main():
                 ([0.8, 0], [1.5, 0])
             ],
             "alpha_rad": np.pi / 2,
-            "k": 15.0,
-            "n": 75
+            "k": 10.0,
+            "n": 350
         },
         "corner_reflector": {
             "intervals": [([-1, 0], [0, 0]), ([0, 0], [0, 1])],
             "alpha_rad": np.pi / 4,
             "k": 10.0,
-            "n": 50
+            "n": 250
         },
         "single_plate_horizontal": {
             "intervals": [([-1, 0], [1, 0])],
             "alpha_rad": np.pi / 2,
             "k": 10.0,
-            "n": 110
+            "n": 125
         },
         "single_plate_angled": {
             "intervals": [([-1, -0.5], [1, 0.5])],
             "alpha_rad": np.pi / 2,
             "k": 10.0,
-            "n": 50
+            "n": 125
         },
         "v_shape_scatterer": {
             "intervals": [([-1, 1], [0, 0]), ([0, 0], [1, 1])],
             "alpha_rad": np.pi / 2,
             "k": 10.0,
-            "n": 50
+            "n": 250
         },
         "complex_obstacle": {
             "intervals": [([-1, 1], [-0.1, 0.1]),
-                          ([0.1, -0.1], [1, -1]), ([1, -1], [2, -1])],
-            "alpha_rad": np.pi/4,
+                          ([0.1, -0.1], [1, -1]),
+                          ([1, -1], [2, -1])],
+            "alpha_rad": np.pi / 4,
             "k": 10.0,
-            "n": 200
+            "n": 350
         }
     }
 
-    key_int = int(input("Select geometry: \n\
+    while True:
+        inp = input("Select geometry: \n\
 1. Complex obstacle \n\
 2. Corner reflector \n\
 3. Double-slit \n\
@@ -74,30 +76,22 @@ def main():
 5. Single horizontal plate \n\
 6. Narrow single-slit \n\
 7. Wide single-slit \n\
-8. V-shape scatterer\n")) - 1
+8. V-shape scatterer\n")
+        if inp.isdigit() and (int(inp) >= 1 and int(inp) <= 8):
+            key_int = int(inp) - 1
+            break
+        print("\n Option invalid. \n")
 
     selected_geometry_key = sorted(geometry_presets.keys())[key_int]
 
-    # --- CHOOSE YOUR VISUALIZATION HERE ---
-    # Change the key to select a different geometry preset
-    # selected_geometry_key = "single_slit_narrow"
-    # selected_geometry_key = "double_slit"
-    # selected_geometry_key = "corner_reflector"
-    # selected_geometry_key = "single_plate_horizontal"
-    # ------------------------------------
-
-    if selected_geometry_key in geometry_presets:
-        config = geometry_presets[selected_geometry_key]
-        print(f"Running BEM for: {selected_geometry_key}")
-        run_bem_test(
-            intervals=config["intervals"],
-            alpha_rad=config["alpha_rad"],
-            k=config["k"],
-            n=config["n"]
-        )
-    else:
-        print(f"Error: Geometry preset '{selected_geometry_key}' not found.")
-        print("Available presets are:", list(geometry_presets.keys()))
+    config = geometry_presets[selected_geometry_key]
+    print(f"Running BEM for: {selected_geometry_key}")
+    run_bem_test(
+        intervals=config["intervals"],
+        alpha_rad=config["alpha_rad"],
+        k=config["k"],
+        n=config["n"]
+    )
 
 
 def plot_mayavi_surface(x, y, u_tot, bem):
