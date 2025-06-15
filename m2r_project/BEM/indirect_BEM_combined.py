@@ -1,6 +1,5 @@
 """Indirect Boundary Element Method for the 2D Helmholtz equation."""
 import numpy as np
-from scipy.special import hankel1
 from math import e, cos, sin
 from scipy.integrate import quad
 from helper.green_function import GreensFunctionCalculator
@@ -58,13 +57,13 @@ class IndirectBEM:
 
     def param_to_physical(self, t, interval_idx):
         """Convert t in [0, 1] to coordinates on the actual boundary."""
-        return (self.intervals[interval_idx][0] + 
+        return (self.intervals[interval_idx][0] +
                 t * self.line_vectors[interval_idx])
 
     def param_to_aux_physical(self, t, interval_idx):
         """Convert t in [0, 1] to coordinates on the auxiliary boundary."""
         physical_point = self.param_to_physical(t, interval_idx)
-        offset = (self.offset_distances[interval_idx] * 
+        offset = (self.offset_distances[interval_idx] *
                   self.normals[interval_idx])
         return physical_point - offset
 
@@ -84,7 +83,7 @@ class IndirectBEM:
             if target_n >= 2 * n_boundary:
                 n_boundary_region1 = n_boundary
                 n_boundary_region3 = n_boundary
-                n_middle_region = (target_n - n_boundary_region1 - 
+                n_middle_region = (target_n - n_boundary_region1 -
                                    n_boundary_region3)
             else:
                 n_boundary_region1 = target_n // 2
@@ -93,7 +92,7 @@ class IndirectBEM:
 
             # Define transition points for the graded mesh
             pt_A, pt_D = 0.0, 1.0
-            param_scale = (1.0 / (self.k * self.line_lengths[i]) 
+            param_scale = (1.0 / (self.k * self.line_lengths[i])
                            if self.line_lengths[i] > 0 else 0.1)
             ideal_transition_B = pt_A + param_scale
             ideal_transition_C = pt_D - param_scale
@@ -108,21 +107,21 @@ class IndirectBEM:
             nodes_to_concatenate = []
             if n_boundary_region1 > 0:
                 nodes_to_concatenate.append(
-                    np.linspace(pt_A, actual_B_endpoint, 
+                    np.linspace(pt_A, actual_B_endpoint,
                                 n_boundary_region1 + 1))
-            if (actual_C_startpoint > actual_B_endpoint and 
+            if (actual_C_startpoint > actual_B_endpoint and
                     n_middle_region > 0):
                 nodes_to_concatenate.append(
-                    np.linspace(actual_B_endpoint, actual_C_startpoint, 
+                    np.linspace(actual_B_endpoint, actual_C_startpoint,
                                 n_middle_region + 1))
             if n_boundary_region3 > 0:
-                start_point_reg3 = (actual_C_startpoint 
-                                     if (actual_C_startpoint > 
-                                         actual_B_endpoint and 
-                                         n_middle_region > 0) 
-                                     else actual_B_endpoint)
+                start_point_reg3 = (actual_C_startpoint
+                                    if (actual_C_startpoint >
+                                        actual_B_endpoint and
+                                        n_middle_region > 0)
+                                    else actual_B_endpoint)
                 nodes_to_concatenate.append(
-                    np.linspace(start_point_reg3, pt_D, 
+                    np.linspace(start_point_reg3, pt_D,
                                 n_boundary_region3 + 1))
 
             if nodes_to_concatenate:
@@ -155,13 +154,13 @@ class IndirectBEM:
 
     def calc_g_prime(self):
         """Calculate the boundary condition g' = -∂u_inc/∂n."""
-        u_inc = np.array([self.incident_field(mid[0], mid[1], self.alpha) 
+        u_inc = np.array([self.incident_field(mid[0], mid[1], self.alpha)
                           for mid in self.mids])
         duinc_dx1 = 1j * self.k * cos(self.alpha) * u_inc
         duinc_dx2 = 1j * self.k * sin(self.alpha) * u_inc
-        normals_array = np.array([self.normals[i] 
+        normals_array = np.array([self.normals[i]
                                   for i in self.mid_interval_indices])
-        self.g_prime = -(normals_array[:, 0] * duinc_dx1 + 
+        self.g_prime = -(normals_array[:, 0] * duinc_dx1 +
                          normals_array[:, 1] * duinc_dx2)
 
     def kernel_real_param(self, t, x_coll, n_x, n_y, src_idx):
@@ -234,8 +233,8 @@ class IndirectBEM:
         u_scattered = np.zeros(len(x_points), dtype=complex)
 
         # Determine the integration path (source points y)
-        param_to_source_physical = (self.param_to_aux_physical 
-                                    if self.use_auxiliary 
+        param_to_source_physical = (self.param_to_aux_physical
+                                    if self.use_auxiliary
                                     else self.param_to_physical)
 
         for idx_x, x_eval in enumerate(x_points):
