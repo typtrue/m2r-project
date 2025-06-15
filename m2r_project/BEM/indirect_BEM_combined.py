@@ -2,13 +2,13 @@
 import numpy as np
 from math import e, cos, sin
 from scipy.integrate import quad
-from helper.green_function import GreensFunctionCalculator
+from ..helper.green_function import GreensFunctionCalculator
 
 
 class IndirectBEM:
     """Combined potential in the Indirect Boundary Element Method."""
 
-    def __init__(self, intervals, alpha, k=10, n=100, use_auxiliary=False):
+    def __init__(self, intervals, alpha, k=10, n=50, use_auxiliary=False):
         """Initialize the BEM solver."""
         self.k = k
         self.alpha = alpha
@@ -44,13 +44,18 @@ class IndirectBEM:
             self.param_to_source_physical = self.param_to_physical
 
         # --- BEM Calculation Workflow ---
+        print("Generating interval discretisation.")
         self.interval_creator()
+        print("Calculating interval midpoints.")
         self.calc_physical_mids()
         self.A = np.zeros((self.N, self.N), dtype=complex)
         self.g_prime = np.zeros(self.N, dtype=complex)
         self.phi = np.zeros(self.N, dtype=complex)
+        print(f"Generating matrix A ({self.N}x{self.N}).")
         self.calc_A()
+        print("Generating g'.")
         self.calc_g_prime()
+        print("Generating field densities.")
         self.calc_phi()
 
     # ------ Coordinate transformations ------ #
@@ -163,27 +168,26 @@ class IndirectBEM:
         self.g_prime = -(normals_array[:, 0] * duinc_dx1 +
                          normals_array[:, 1] * duinc_dx2)
 
+    def _kernel_integrand(self, t, x_coll, n_x, n_y, src_idx):
+        """Compute the complex kernel integrand value."""
+        y_source = self.param_to_source_physical(t, src_idx)
+        return (-self.k**2 *
+                self.greens_func.greens_func(x_coll, y_source) +
+                1j * self.greens_func.dir_deriv(x_coll, y_source, n_x) -
+                self.greens_func.mixed_dir_deriv(x_coll, y_source, n_x, n_y)
+                )
+
     def kernel_real_param(self, t, x_coll, n_x, n_y, src_idx):
         """Compute real part of kernel integrand in parametric form."""
-        y_source = self.param_to_source_physical(t, src_idx)
         jacobian = self.line_lengths[src_idx]
-        integ = (-self.k**2 *
-                 self.greens_func.greens_func(x_coll, y_source) +
-                 1j * self.greens_func.dir_deriv(x_coll, y_source, n_x) -
-                 self.greens_func.mixed_dir_deriv(x_coll, y_source, n_x, n_y)
-                 )
-        return np.real(integ) * jacobian
+        integ_val = self._kernel_integrand(t, x_coll, n_x, n_y, src_idx)
+        return np.real(integ_val) * jacobian
 
     def kernel_imag_param(self, t, x_coll, n_x, n_y, src_idx):
         """Compute imaginary part of kernel integrand in parametric form."""
-        y_source = self.param_to_source_physical(t, src_idx)
         jacobian = self.line_lengths[src_idx]
-        integ = (-self.k**2 *
-                 self.greens_func.greens_func(x_coll, y_source) +
-                 1j * self.greens_func.dir_deriv(x_coll, y_source, n_x) -
-                 self.greens_func.mixed_dir_deriv(x_coll, y_source, n_x, n_y)
-                 )
-        return np.imag(integ) * jacobian
+        integ_val = self._kernel_integrand(t, x_coll, n_x, n_y, src_idx)
+        return np.imag(integ_val) * jacobian
 
     def calc_A(self):
         """Calculate the influence matrix A."""
@@ -228,14 +232,32 @@ class IndirectBEM:
             print(f"Error solving linear system: {e}")
             self.phi = None
 
+    def _scattered_field_integrand(self, x_pt, y_pt, normal_at_y, phi_j):
+        """Compute the complex integrand for the scattered fieldA."""
+        return (
+            (self.greens_func.dir_deriv(x_pt, y_pt, normal_at_y) -
+             1j * self.k * self.greens_func.greens_func(x_pt, y_pt)) * phi_j
+        )
+
+    def green_real_param(self, t, x_pt, src_interval_idx, normal_at_y,
+                         phi_j, line_length_j):
+        """Compute real part of green integrand in parametric form."""
+        y_pt = self.param_to_source_physical(t, src_interval_idx)
+        integrand_val = self._scattered_field_integrand(
+            x_pt, y_pt, normal_at_y, phi_j)
+        return np.real(integrand_val) * line_length_j
+
+    def green_imag_param(self, t, x_pt, src_interval_idx, normal_at_y,
+                         phi_j, line_length_j):
+        """Compute imaginary part of green integrand in parametric form."""
+        y_pt = self.param_to_source_physical(t, src_interval_idx)
+        integrand_val = self._scattered_field_integrand(
+            x_pt, y_pt, normal_at_y, phi_j)
+        return np.imag(integrand_val) * line_length_j
+
     def calc_u_scat(self, x_points):
         """Calculate the scattered field at a set of evaluation points."""
         u_scattered = np.zeros(len(x_points), dtype=complex)
-
-        # Determine the integration path (source points y)
-        param_to_source_physical = (self.param_to_aux_physical
-                                    if self.use_auxiliary
-                                    else self.param_to_physical)
 
         for idx_x, x_eval in enumerate(x_points):
             if idx_x > 0 and idx_x % 100 == 0:
@@ -250,26 +272,16 @@ class IndirectBEM:
                 line_length_j = self.line_lengths[interval_idx_j]
                 normal_at_y = self.normals[interval_idx_j]
 
-                def green_real_param(t, x_pt, src_interval_idx):
-                    y_pt = param_to_source_physical(t, src_interval_idx)
-                    integrand = ((self.greens_func.dir_deriv(
-                        x_pt, y_pt, normal_at_y) -
-                                  1j * self.k * self.greens_func.greens_func(
-                                      x_pt, y_pt)) * phi_j)
-                    return np.real(integrand) * line_length_j
-
-                def green_imag_param(t, x_pt, src_interval_idx):
-                    y_pt = param_to_source_physical(t, src_interval_idx)
-                    integrand = ((self.greens_func.dir_deriv(
-                        x_pt, y_pt, normal_at_y) -
-                                  1j * self.k * self.greens_func.greens_func(
-                                      x_pt, y_pt)) * phi_j)
-                    return np.imag(integrand) * line_length_j
-
-                real_part, _ = quad(green_real_param, t_a, t_b,
-                                    args=(x_eval, interval_idx_j))
-                imag_part, _ = quad(green_imag_param, t_a, t_b,
-                                    args=(x_eval, interval_idx_j))
+                real_part, _ = quad(
+                    self.green_real_param, t_a, t_b,
+                    args=(x_eval, interval_idx_j, normal_at_y, phi_j,
+                          line_length_j)
+                )
+                imag_part, _ = quad(
+                    self.green_imag_param, t_a, t_b,
+                    args=(x_eval, interval_idx_j, normal_at_y, phi_j,
+                          line_length_j)
+                )
                 val_at_x += (real_part + 1j * imag_part)
 
             u_scattered[idx_x] = val_at_x

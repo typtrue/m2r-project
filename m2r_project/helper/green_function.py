@@ -5,7 +5,7 @@ import numpy as np
 
 
 class GreensFunctionCalculator:
-    """Calculates and visualizes the Green's function for the 2D Helmholtz eq."""
+    """Calculates & visualizes the Green's function for the 2D Helmholtz eq."""
 
     def __init__(self, k, n=1000):
         """Initialize the calculator with a wavenumber and grid size."""
@@ -42,7 +42,7 @@ class GreensFunctionCalculator:
         return (1.0j * self.k ** 2 * np.dot(diff, unit_vec_x) *
                 np.dot(diff, unit_vec_y) * s) / (8 * R ** 2)
 
-    def generate_surface_data(self, r0):
+    def generate_surface_data(self, r0, cap_value=5):
         """Generate the z-values for the Green's function surface plot."""
         x_vals = np.linspace(-3, 3, self.n)
         y_vals = np.linspace(-3, 3, self.n)
@@ -56,6 +56,6 @@ class GreensFunctionCalculator:
         z_vals = 1.0j * hankel1(0, self.k * distances) / 4
 
         # Cap the values to avoid extreme peaks in the visualization
-        z_vals[np.abs(z_vals) >= 5] = np.nan
+        z_vals[np.abs(z_vals) >= cap_value] = np.nan
 
         return x_grid, y_grid, z_vals.real.reshape(self.n, self.n)

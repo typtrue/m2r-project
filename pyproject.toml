@@ -3,7 +3,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "m2r"
+name = "m2r_project"
 version = "0.1.0"
 authors = [
   { name="Dan Haywood", CID="02404325" },
@@ -19,3 +19,7 @@ dependencies = [
     "mayavi",
     "scipy",
 ]
+
+[project.scripts]
+run-bem-visuals = "m2r_project.visuals.BEM_visuals:main"
+run-general-visuals = "m2r_project.visuals.general_visuals:main"

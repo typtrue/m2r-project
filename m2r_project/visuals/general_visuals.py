@@ -1,9 +1,22 @@
-"""Generate plots and visuals."""
+"""Generate useful visuals for the project."""
 
 import numpy as np
 import matplotlib.pyplot as plt
 import mayavi.mlab as ml
-from helper.green_function import GreensFunctionCalculator
+from ..helper.green_function import GreensFunctionCalculator
+
+
+def main():
+    """Generate visuals with some defined constants."""
+    WAVENUMBER = 10
+    GRID_SIZE = 1000
+    SOURCE_POINT = np.array([0, 0])
+
+    # To display the schematic of the boundary conditions:
+    plot_boundary_schematic()
+
+    # To display the 3D surface of the Green's function:
+    plot_green_function_surface(WAVENUMBER, GRID_SIZE, r0=SOURCE_POINT)
 
 
 def plot_boundary_schematic():
@@ -40,12 +53,4 @@ def plot_green_function_surface(k, n, r0):
 
 
 if __name__ == '__main__':
-    WAVENUMBER = 10
-    GRID_SIZE = 1000
-    SOURCE_POINT = np.array([0, 0])
-
-    # To display the schematic of the boundary conditions:
-    plot_boundary_schematic()
-
-    # To display the 3D surface of the Green's function:
-    plot_green_function_surface(WAVENUMBER, GRID_SIZE, r0=SOURCE_POINT)
+    main()

@@ -1,7 +1,90 @@
 """Generate visuals based on the indirect BEM algorithm."""
 
+import numpy as np
 import matplotlib.pyplot as plt
 import mayavi.mlab as ml
+from ..BEM.indirect_BEM_combined import IndirectBEM
+
+
+def main():
+    """Set up and runs a BEM simulation with predefined parameters."""
+    print("Running BEM visuals.")
+
+    geometry_presets = {
+        "single_slit_narrow": {
+            "intervals": [([-1, 0], [-0.3, 0]), ([0.3, 0], [1, 0])],
+            "alpha_rad": np.pi / 2,
+            "k": 10.0,
+            "n": 50
+        },
+        "single_slit_wide": {
+            "intervals": [([-1, 0], [-0.6, 0]), ([0.6, 0], [1, 0])],
+            "alpha_rad": np.pi / 2,
+            "k": 10.0,
+            "n": 50
+        },
+        "double_slit": {
+            "intervals": [
+                ([-1.5, 0], [-0.8, 0]),
+                ([-0.4, 0], [0.4, 0]),
+                ([0.8, 0], [1.5, 0])
+            ],
+            "alpha_rad": np.pi / 2,
+            "k": 15.0,
+            "n": 75
+        },
+        "corner_reflector": {
+            "intervals": [([-1, 0], [0, 0]), ([0, 0], [0, 1])],
+            "alpha_rad": np.pi / 4,
+            "k": 10.0,
+            "n": 50
+        },
+        "single_plate_horizontal": {
+            "intervals": [([-1, 0], [1, 0])],
+            "alpha_rad": np.pi / 2,
+            "k": 5.0,
+            "n": 50
+        },
+        "single_plate_angled": {
+            "intervals": [([-1, -0.5], [1, 0.5])],
+            "alpha_rad": np.pi / 2,
+            "k": 10.0,
+            "n": 50
+        },
+        "v_shape_scatterer": {
+            "intervals": [([-1, 1], [0, 0]), ([0, 0], [1, 1])],
+            "alpha_rad": np.pi / 2,
+            "k": 10.0,
+            "n": 50
+        },
+        "complex_obstacle": {
+            "intervals": [([-1, 1], [-0.1, 0.1]), ([0.1, -0.1], [1, -1]), ([1, -1], [2, -1])],
+            "alpha_rad": np.pi/4,
+            "k": 10.0,
+            "n": 200
+        }
+    }
+
+    # --- CHOOSE YOUR VISUALIZATION HERE ---
+    # Change the key to select a different geometry preset
+    selected_geometry_key = "single_slit_narrow"
+    # selected_geometry_key = "double_slit"
+    # selected_geometry_key = "corner_reflector"
+    # selected_geometry_key = "single_plate_horizontal"
+    # ------------------------------------
+
+    if selected_geometry_key in geometry_presets:
+        config = geometry_presets[selected_geometry_key]
+        print(f"Running BEM for: {selected_geometry_key}")
+        run_bem_test(
+            intervals=config["intervals"],
+            alpha_rad=config["alpha_rad"],
+            k=config["k"],
+            n=config["n"]
+        )
+    else:
+        print(f"Error: Geometry preset '{selected_geometry_key}' not found.")
+        print("Available presets are:", list(geometry_presets.keys()))
 
 
 def plot_mayavi_surface(x, y, u_tot, bem):
@@ -11,13 +94,12 @@ def plot_mayavi_surface(x, y, u_tot, bem):
 
 
 def plot_wave_effects(x_grid, y_grid, u_tot, bem, alpha_rad, k):
-    """Plot the incident wave path and total field magnitude using
-    Matplotlib."""
+    """Plot the incident wave path and total field magnitude."""
     alpha_deg = np.rad2deg(alpha_rad)
     x_coords = x_grid[0, :]
     y_coords = y_grid[:, 0]
 
-    title_intervals = '; '.join([f"[{s.tolist()}] to [{e.tolist()}]" 
+    title_intervals = '; '.join([f"[{s.tolist()}] to [{e.tolist()}]"
                                  for s, e in bem.intervals])
     plt.figure(figsize=(14, 6))
     plt.suptitle(f'Wave Fields (k={k}, Lines from {title_intervals}, '
@@ -35,12 +117,12 @@ def plot_wave_effects(x_grid, y_grid, u_tot, bem, alpha_rad, k):
     U_q = np.full_like(X_q, u_direction)
     V_q = np.full_like(Y_q, v_direction)
 
-    ax1.quiver(X_q, Y_q, U_q, V_q, angles='xy', scale_units='xy', 
-               scale=(k/1.5 or 5), color='cyan', headwidth=5, headlength=7, 
+    ax1.quiver(X_q, Y_q, U_q, V_q, angles='xy', scale_units='xy',
+               scale=(k/1.5 or 5), color='cyan', headwidth=5, headlength=7,
                width=0.004, pivot='tail')
     for i, (start, end) in enumerate(bem.intervals):
-        ax1.plot([start[0], end[0]], [start[1], end[1]], 'r-', linewidth=3, 
-                 label='Boundary $\gamma$' if i == 0 else "_nolegend_")
+        ax1.plot([start[0], end[0]], [start[1], end[1]], 'r-', linewidth=3,
+                 label=r'Boundary $\gamma$' if i == 0 else "_nolegend_")
     ax1.set_xlabel('$x$')
     ax1.set_ylabel('$y$')
     ax1.set_title('Incident Wave Path')
@@ -51,9 +133,9 @@ def plot_wave_effects(x_grid, y_grid, u_tot, bem, alpha_rad, k):
 
     # Subplot 2: Total Field Magnitude
     ax2 = plt.subplot(1, 2, 2)
-    im_total = ax2.imshow(u_tot, extent=[x_coords.min(), x_coords.max(), 
+    im_total = ax2.imshow(u_tot, extent=[x_coords.min(), x_coords.max(),
                                          y_coords.min(), y_coords.max()],
-                          origin='lower', aspect='auto', cmap='viridis', 
+                          origin='lower', aspect='auto', cmap='viridis',
                           interpolation='nearest')
     plt.colorbar(im_total, ax=ax2, label='$|u_{total}|$')
     for start, end in bem.intervals:
@@ -68,12 +150,13 @@ def plot_wave_effects(x_grid, y_grid, u_tot, bem, alpha_rad, k):
 
 
 def amplitude_sample(bem, n=1000, r=10**7):
+    """Plot the far-field amplitude pattern of the scattered wave."""
     x_vals = np.linspace(0, 2*np.pi, n, endpoint=False)
     y_vals = np.ones(n)
     for i in range(len(y_vals)):
         pos = (r*np.cos(x_vals[i]), r*np.sin(x_vals[i]))
 
-        y_vals[i] = abs(bem.calc_u_scat(pos)[0] * np.sqrt(r) / 
+        y_vals[i] = abs(bem.calc_u_scat(pos)[0] * np.sqrt(r) /
                         np.exp(1.0j * bem.k * r))
 
         if i % 100 == 0:
@@ -82,7 +165,7 @@ def amplitude_sample(bem, n=1000, r=10**7):
     fig, ax = plt.subplots()
     ax.plot(x_vals, y_vals, linewidth=2)
     ax.set_xlabel("Angle from center θ", fontsize=15)
-    ax.set_ylabel("Absolute value of amplitude function |A(θ)|", 
+    ax.set_ylabel("Absolute value of amplitude function |A(θ)|",
                   fontsize=15)
 
     ticks = np.linspace(0, 2*np.pi, 5)
@@ -93,25 +176,27 @@ def amplitude_sample(bem, n=1000, r=10**7):
 
 
 def run_bem_test(intervals, alpha_rad, k, n):
+    """Run a complete BEM simulation and generate visualization plots."""
     bem = IndirectBEM(intervals=intervals, alpha=alpha_rad, k=k, n=n)
 
     # Field plots
     grid_res = 40
 
     # Determine plot bounds based on all line segments
-    all_coords = np.vstack([p for interval in bem.intervals 
+    all_coords = np.vstack([p for interval in bem.intervals
                             for p in interval])
-    # x_min, x_max = all_coords[:, 0].min() - 2, all_coords[:, 0].max() + 2
-    # y_min, y_max = all_coords[:, 1].min() - 2, all_coords[:, 1].max() + 2
+    # Add a 2-unit margin around the object for better visualization
+    x_min = max(all_coords[:, 0].min() - 2, -3)
+    x_max = min(all_coords[:, 0].max() + 2, 3)
 
-    x_min, x_max = -3, 3
-    y_min, y_max = -3, 3
+    y_min = max(all_coords[:, 1].min() - 2, -3)
+    y_max = min(all_coords[:, 1].max() + 2, 3)
 
     x_coords = np.linspace(x_min, x_max, grid_res)
     y_coords = np.linspace(y_min, y_max, grid_res)
     x_grid, y_grid = np.meshgrid(x_coords, y_coords)
-    eval_points_grid = np.vstack([x_grid.ravel(), y_grid.ravel()]).T
 
+    eval_points_grid = np.vstack([x_grid.ravel(), y_grid.ravel()]).T
     u_inc_grid = bem.incident_field(eval_points_grid[:, 0],
                                     eval_points_grid[:, 1], alpha_rad).real
 
@@ -129,10 +214,4 @@ def run_bem_test(intervals, alpha_rad, k, n):
 
 
 if __name__ == '__main__':
-    # Change to run with a set of intervals.
-    # intervals = [([-1, 1], [-0.1, 0.1]), ([0.1, -0.1], [1, -1]),
-    #              ([1, -1], [2, -1])]
-    # run_bem_test(intervals, np.pi/4, 10.0, 200)
-
-    intervals = [([-1, 0], [-0.3, 0]), ([0.3, 0], [1, 0])]
-    run_bem_test(intervals, np.pi/2, 10.0, 400)
+    main()
