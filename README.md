@@ -17,7 +17,7 @@ All code contained in this repo was written by Dan Haywood and Michael Williams.
 To generate visualisations you can use the following scripts:
 run-bem-visuals: Generate visuals based on the indirect BEM algorithm.
 run-general-visuals: Generate useful visuals for the project.
-
+test-indirect-bem: Test the accuracy of the indirect BEM algorithm.
 
 We make use of the `mayavi` and `matplotlib` packages to plot results and figures,
 and the `numpy` and `scipy` packages for general calculation purposes.
