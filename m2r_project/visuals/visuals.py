@@ -25,17 +25,10 @@ def plot_boundary_schematic():
 
 
 def plot_green_function_surface(k, n, r0):
-    """
-    Plot the 3D surface of the Green's function using Mayavi.
-
-    Args:
-        k (int): The wavenumber for the calculations.
-        n (int): The number of points for the grid.
-        r0 (np.ndarray): The source point for the function.
-    """
+    """Plot the 3D surface of the Green's function using Mayavi."""
     print("Generating surface data...")
-    greens_function = GreensFunctionCalculator(k, n)
-    x, y, z = greens_function.generate_surface_data(r0)
+    greens_func = GreensFunctionCalculator(k, n)
+    x, y, z = greens_func.generate_surface_data(r0)
     print("Data generated. Rendering surface...")
     ml.figure(bgcolor=(1, 1, 1), fgcolor=(0, 0, 0))
     ml.surf(x.T, y.T, z.T, colormap='viridis')

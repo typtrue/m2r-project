@@ -5,73 +5,45 @@ import numpy as np
 
 
 class GreensFunctionCalculator:
-    """
-    Calculates and visualizes the Green's function for the 2D Helmholtz eq.
-
-    Attributes:
-        k (int): The wavenumber for the calculations.
-        n (int): The number of points for the grid.
-    """
+    """Calculates and visualizes the Green's function for the 2D Helmholtz eq."""
 
     def __init__(self, k, n=1000):
-        """
-        Initialize the calculator with a wavenumber and grid size.
-
-        Args:
-            k (int): The wavenumber.
-            n (int): The number of points in each dimension of the grid.
-        """
+        """Initialize the calculator with a wavenumber and grid size."""
         self.k = k
         self.n = n
 
-    @staticmethod
-    def calculate_helmholtz_green_function(r, r0, k):
-        """
-        Calculate the Green's function for the 2D Helmholtz equation.
+    def greens_func(self, r, r0):
+        """Calculate the Green's function for the 2D Helmholtz equation."""
+        if not isinstance(r, np.ndarray):
+            r = np.array(r)
+        if not isinstance(r0, np.ndarray):
+            r0 = np.array(r0)
 
-        Args:
-            r (np.ndarray): The observation point.
-            r0 (np.ndarray): The source point.
-            k (float): The wavenumber.
+        R = np.linalg.norm(r - r0)
+        return 1.0j * hankel1(0, self.k * R) / 4
 
-        Returns:
-            complex: The value of the Green's function.
-        """
-        distance = np.linalg.norm(r - r0)
-        return 1.0j * hankel1(0, k * distance) / 4
+    def dir_deriv(self, x, y, unit_vec):
+        """Partial derivative of the Green's function w.r.t. unit vector."""
+        diff = x - y
+        R = np.linalg.norm(diff)
+        if np.isclose(R, 0):
+            return np.inf + 0j
+        direction = diff / R
+        unit_deriv = np.dot(direction, unit_vec)
+        return unit_deriv * (1j * self.k / 4.0) * hankel1(1, self.k * R)
 
-    def calculate_partial_derivative_y(self, r, r0):
-        """
-        Calculate the partial derivative of the Green's function.
-
-        This is with respect to the second coordinate of the second variable.
-
-        Args:
-            r (np.ndarray): The observation point (w, x).
-            r0 (np.ndarray): The source point (y, z).
-
-        Returns:
-            complex: The value of the partial derivative.
-        """
-        distance = np.linalg.norm(r - r0)
-        # Avoid division by zero if r and r0 are the same point.
-        if distance == 0:
-            return 0
-        _, x = r
-        _, z = r0
-        factor = self.k * (x - z) / (4 * distance)
-        return 1.0j * factor * hankel1(1, self.k * distance)
+    def mixed_dir_deriv(self, x, y, unit_vec_x, unit_vec_y):
+        """Partial derivative of the Green's function w.r.t x and y."""
+        diff = x - y
+        R = np.linalg.norm(diff)
+        if np.isclose(R, 0):
+            return np.inf + 0j
+        s = hankel1(0, self.k * R) - hankel1(2, self.k * R)
+        return (1.0j * self.k ** 2 * np.dot(diff, unit_vec_x) *
+                np.dot(diff, unit_vec_y) * s) / (8 * R ** 2)
 
     def generate_surface_data(self, r0):
-        """
-        Generate the z-values for the Green's function surface plot.
-
-        Args:
-            r0 (np.ndarray): The source point.
-
-        Returns:
-            np.ndarray: A 2D array of the real part of the Green's function.
-        """
+        """Generate the z-values for the Green's function surface plot."""
         x_vals = np.linspace(-3, 3, self.n)
         y_vals = np.linspace(-3, 3, self.n)
         x_grid, y_grid = np.meshgrid(x_vals, y_vals)
