@@ -4,6 +4,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import mayavi.mlab as ml
 from ..helper.green_function import GreensFunctionCalculator
+from ..helper.wave_components import u_d, u_r, u_i   # NOQA F401
 
 
 def main():
@@ -41,28 +42,8 @@ def plot_boundary_schematic():
     plt.show()
 
 
-def u_d(x, y, k, x_source):
-    pi = np.pi
-    if x_source == 1:
-        diff = x - x_source
-    else:
-        diff = x_source - x
-    norm = np.sqrt(diff**2 + y**2)
-    s1 = 1.0j * np.exp(1.0j * pi / 4) / (np.sqrt(2*pi*k) * diff)
-    s2 = np.sqrt(norm - diff)
-    s3 = np.exp(1.0j * k * norm)
-    return s1 * s2 * s3
-
-
-def u_r(x, y, k):
-    return np.exp(1.0j * k * -y)
-
-
-def u_i(x, y, k):
-    return np.exp(1.0j * k * y)
-
-
 def analytical_solution(x, y, k):
+    """Compute the analytical solution."""
     # if x < -1 or x > 1:
     #     return u_i(x, y, k) + u_d(x, y, k, -1) + u_d(x, y, k, 1)
     # elif y > 0:
@@ -74,6 +55,7 @@ def analytical_solution(x, y, k):
 
 
 def plot_analytical_asymptotics():
+    """Plot the analytical asymptotics."""
     r = 10**7
     n = 1000
     k = 50
@@ -102,6 +84,7 @@ def plot_analytical_asymptotics():
 
 
 def plot_analytical_solution():
+    """Plot the analytical solution."""
     k = 10
     n = 1000
 
