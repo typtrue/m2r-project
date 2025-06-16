@@ -13,7 +13,11 @@ def main():
     SOURCE_POINT = np.array([0, 0])
 
     # To display the schematic of the boundary conditions:
-    plot_boundary_schematic()
+    # plot_boundary_schematic()
+
+    plot_analytical_asymptotics()
+
+    return
 
     # To display the 3D surface of the Green's function:
     plot_green_function_surface(WAVENUMBER, GRID_SIZE, r0=SOURCE_POINT)
@@ -35,6 +39,101 @@ def plot_boundary_schematic():
     ax.text(1.5, -0.1, '3', fontsize=20)
     ax.legend()
     plt.show()
+
+
+def u_d(x, y, k, x_source):
+    pi = np.pi
+    if x_source == 1:
+        diff = x - x_source
+    else:
+        diff = x_source - x
+    norm = np.sqrt(diff**2 + y**2)
+    s1 = 1.0j * np.exp(1.0j * pi / 4) / (np.sqrt(2*pi*k) * diff)
+    s2 = np.sqrt(norm - diff)
+    s3 = np.exp(1.0j * k * norm)
+    return s1 * s2 * s3
+
+
+def u_r(x, y, k):
+    return np.exp(1.0j * k * -y)
+
+
+def u_i(x, y, k):
+    return np.exp(1.0j * k * y)
+
+
+def analytical_solution(x, y, k):
+    # if x < -1 or x > 1:
+    #     return u_i(x, y, k) + u_d(x, y, k, -1) + u_d(x, y, k, 1)
+    # elif y > 0:
+    #     return u_d(x, y, k, -1) + u_d(x, y, k, 1)
+    # else:
+    #     return u_i(x, y, k) + u_r(x, y, k) + u_d(x, y, k, -1) + u_d(x, y, k, 1)
+
+    return u_d(x, y, k, -1) + u_d(x, y, k, 1)
+
+
+def plot_analytical_asymptotics():
+    r = 10**7
+    n = 1000
+    k = 50
+    x_vals = np.linspace(0, 2*np.pi, n, endpoint=False)
+    y_vals = np.ones(n)
+    for i in range(len(y_vals)):
+        pos = (r*np.cos(x_vals[i]), r*np.sin(x_vals[i]))
+
+        y_vals[i] = abs((analytical_solution(pos[0], pos[1], k)) * np.sqrt(r) /
+                        np.exp(1.0j * k * r))
+
+        if i % 100 == 0:
+            print(f"Calculating amplitude sample: {i}/{n} points completed.")
+
+    fig, ax = plt.subplots()
+    ax.plot(x_vals, y_vals, linewidth=2)
+    ax.set_xlabel("Angle from center θ", fontsize=15)
+    ax.set_ylabel("Absolute value of amplitude function |A(θ)|",
+                  fontsize=15)
+
+    ticks = np.linspace(0, 2*np.pi, 5)
+    xlabels = ["0", "π/2", "π", "3π/2", "2π"]
+    ax.set_xticks(ticks, labels=xlabels)
+
+    plt.show()
+
+
+def plot_analytical_solution():
+    k = 10
+    n = 1000
+
+    xvals, yvals = np.linspace(-3, 3, n), np.linspace(-3, 3, n)
+    x, y = np.meshgrid(xvals, yvals)
+
+    z = np.ones(n**2)
+
+    stack = np.vstack([x.ravel(), y.ravel()]).T
+
+    for i in range(n**2):
+
+        if i % 100 == 0:
+            print(f"{i}/{n**2}")
+
+        x_i, y_i = stack[i]
+        # if x_i < -1 or x_i > 1:
+        #     z[i] = u_i(x_i, y_i) + u_d(x_i, y_i, -1) + u_d(x_i, y_i, 1)
+        # elif y_i > 0:
+        #     z[i] = u_d(x_i, y_i, -1) + u_d(x_i, y_i, 1)
+        # else:
+        #     z[i] = u_i(x_i, y_i) + u_r(x_i, y_i) +
+        #            u_d(x_i, y_i, -1) + u_d(x_i, y_i, 1)
+
+        z[i] = u_d(x_i, y_i, k, -1) + u_d(x_i, y_i, k, 1)
+
+        z[i] = z[i].real
+
+    z_vals = z.reshape(x.shape)
+
+    ml.surf(x.T, y.T, z_vals.T)
+    ml.show()
 
 
 def plot_green_function_surface(k, n, r0):
