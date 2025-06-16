@@ -6,7 +6,7 @@ from ..helper.mesh_convergence import mesh_convergence
 
 def main():
     """Set up and test BEM for different mesh discretisation."""
-    n_values = [40, 60, 80, 100, 120]
+    n_values = [40, 80, 120, 160, 200, 240, 280]
     metric_angle = 3 * np.pi / 2
     amplitudes = mesh_convergence(n_values, metric_angle)
     direct_convergence(n_values, amplitudes, metric_angle)
@@ -16,7 +16,6 @@ def main():
 def direct_convergence(n, amplitudes, metric_angle=3*np.pi/2):
     """Direct convergence of the amplitude value."""
     plt.figure(figsize=(12, 6))
-    plt.subplot(1, 2, 1)
     plt.plot(n, amplitudes, 'o-', markerfacecolor='cyan',
              markeredgecolor='k', color='k')
     plt.xlabel("Number of Boundary Elements (N)")
@@ -31,7 +30,7 @@ def log_log_error(n, amplitudes):
     errors = [np.abs(res - true_value) for res in amplitudes[:-1]]
     h_values = [1/n for n in n[:-1]]
 
-    plt.subplot(1, 2, 2)
+    plt.figure(figsize=(12, 6))
     plt.loglog(h_values, errors, 's-', markerfacecolor='salmon',
                markeredgecolor='k', color='k')
     plt.xlabel("Mesh Size (h ~ 1/N)")
