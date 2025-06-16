@@ -15,9 +15,11 @@ This repo contains code used to generate figures for the report / presentation, 
 code that computes numerical solutions to the problem posed in our project.
 All code contained in this repo was written by Dan Haywood and Michael Williams.
 To generate visualisations you can use the following scripts:
-run-bem-visuals: Generate visuals based on the indirect BEM algorithm.
-run-general-visuals: Generate useful visuals for the project.
-test-bem-visuals: Test the accuracy of the indirect BEM algorithm.
+<ul>
+    <li><code>run-bem-visuals</code>: Generate visuals based on the indirect BEM algorithm.</li>
+    <li><code>run-general-visuals</code>: Generate useful visuals for the project.</li>
+    <li><code>test-bem-visuals</code>: Test the accuracy of the indirect BEM algorithm.</li>
+</ul>
 
 We make use of the `mayavi` and `matplotlib` packages to plot results and figures,
 and the `numpy` and `scipy` packages for general calculation purposes.
