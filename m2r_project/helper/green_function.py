@@ -34,9 +34,14 @@ class GreensFunctionCalculator:
         """Partial derivative of the Green's function w.r.t x and y."""
         diff = x - y
         R = np.linalg.norm(diff)
-        s = hankel1(0, self.k * R) - hankel1(2, self.k * R)
-        return (1.0j * self.k ** 2 * np.dot(diff, unit_vec_x) *
-                np.dot(diff, unit_vec_y) * s) / (8 * R ** 2)
+        h_0_2 = hankel1(0, self.k * R) - hankel1(2, self.k * R)
+        h_1 = hankel1(1, self.k * R)
+        s1 = 2 * np.dot(diff, unit_vec_x)**2 * h_1 * np.dot(unit_vec_x,
+                                                            unit_vec_y)
+        s2 = np.dot(diff, unit_vec_x) * R * np.dot(diff, unit_vec_y) * h_0_2
+        s3 = -2 * np.dot(diff, unit_vec_x) * np.dot(diff, unit_vec_y) * h_1
+
+        return (s1 + s2 + s3) / 2 * R**3
 
     def generate_surface_data(self, r0, cap_value=5):
         """Generate the z-values for the Green's function surface plot."""
