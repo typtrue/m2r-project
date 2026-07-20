@@ -33,4 +33,4 @@ Once installed, you can generate visualisations through the command line by usin
 
 ## Project Report
 
-The writup for this project can be found in the repository, or using [this link](https://github.com/typtrue/m2r-project/blob/main/M2R.pdf).
+The writeup for this project can be found in the repository, or using [this link](https://github.com/typtrue/m2r-project/blob/main/M2R.pdf).
