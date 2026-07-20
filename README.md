@@ -30,3 +30,7 @@ Once installed, you can generate visualisations through the command line by usin
     <li><code>run-general-visuals</code>: Generate useful visuals for the project.</li>
     <li><code>test-bem-visuals</code>: Test the accuracy of the indirect BEM algorithm.</li>
 </ul>
+
+## Project Report
+
+The writup for this project can be found in the repository, or using [this link](https://github.com/typtrue/m2r-project/blob/main/M2R.pdf).
